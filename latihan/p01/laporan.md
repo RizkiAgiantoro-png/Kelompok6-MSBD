@@ -40,3 +40,38 @@ Hal ini bisa dibilang sangat penting karena waktu container database menyala ata
 Menyimpan password langsung di dalam docker-compose.yml merupakan praktik yang kurang baik. Sebutkan satu cara yang lebih aman dan jelaskan mengapa hal tersebut penting ketika berkas masuk ke repositori Git.
 Cara yang lebih aman adalah memakai file .env. nantinya  password-nya disimpan di dalam file .env terlebih dulu, lalu nanti dipanggil di docker-compose.yml memakai variabel (contohnya POSTGRES_PASSWORD=${DB_PASSWORD}).
 cara ini lebih baik karena file docker-compose.yml akan kita push ke Git supaya bisa diakses anggota tim yang lain. kalau password-nya ditulis secara langsung, otomatis semua orang yang buka repositori kita bisa melihat password database kita. dengan pakai file .env, password-nya akan aman di komputer masing-masing karena karena file .env akan dicegah agar tidak ikut terunggah oleh .gitignore.
+
+Perbandingan penggunaan psql dan DBeaver
+Belum ada
+
+Hasil query V1
+Plaintext
+ count 
+-------
+    21
+(1 row)
+Hasil query V2
+Plaintext
+     relname      | ukuran  
+------------------+---------
+ rental           | 2352 kB
+ film             | 952 kB
+ payment_p2017_04 | 656 kB
+ payment_p2017_03 | 568 kB
+ film_actor       | 488 kB
+ inventory        | 440 kB
+ payment_p2017_02 | 296 kB
+ payment_p2017_01 | 248 kB
+ customer         | 216 kB
+ address          | 160 kB
+(10 rows)
+Hasil query V3
+Plaintext
+        title        | total_sewa 
+---------------------+------------
+ BUCKET BROTHERHOOD  |         34
+ ROCKETEER MOTHER    |         33
+ RIDGEMONT SUBMARINE |         32
+ SCALAWAG DUCK       |         32
+ FORWARD TEMPLE      |         32
+(5 rows)
