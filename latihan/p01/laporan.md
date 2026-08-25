@@ -75,3 +75,28 @@ Plaintext
  SCALAWAG DUCK       |         32
  FORWARD TEMPLE      |         32
 (5 rows)
+Hasil V4 — EXPLAIN ANALYZE
+Plaintext
+                                                                     QUERY PLAN                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate  (cost=713.69..723.69 rows=1000 width=23) (actual time=7.772..7.838 rows=958 loops=1)
+   Group Key: f.title
+   Batches: 1  Memory Usage: 193kB
+   ->  Hash Join  (cost=238.57..633.47 rows=16044 width=15) (actual time=0.820..5.517 rows=16044 loops=1)
+         Hash Cond: (i.film_id = f.film_id)
+         ->  Hash Join  (cost=128.07..480.67 rows=16044 width=2) (actual time=0.534..3.482 rows=16044 loops=1)
+               Hash Cond: (r.inventory_id = i.inventory_id)
+               ->  Seq Scan on rental r  (cost=0.00..310.44 rows=16044 width=4) (actual time=0.003..0.922 rows=16044 loops=1)
+               ->  Hash  (cost=70.81..70.81 rows=4581 width=6) (actual time=0.521..0.521 rows=4581 loops=1)
+                     Buckets: 8192  Batches: 1  Memory Usage: 234kB
+                     ->  Seq Scan on inventory i  (cost=0.00..70.81 rows=4581 width=6) (actual time=0.003..0.247 rows=4581 loops=1)
+         ->  Hash  (cost=98.00..98.00 rows=1000 width=19) (actual time=0.282..0.283 rows=1000 loops=1)
+               Buckets: 1024  Batches: 1  Memory Usage: 60kB
+               ->  Seq Scan on film f  (cost=0.00..98.00 rows=1000 width=19) (actual time=0.011..0.184 rows=1000 loops=1)
+ Planning Time: 0.354 ms
+ Execution Time: 8.128 ms
+(16 rows)
+Kalimat: “Yang paling membingungkan dari keluaran ini adalah ...”
+Hal membingungkan dari hasilnya adalah cara menentukan urutan prosesnya, karena tampilannya dibuat bertingkat. Adanya indentasi dan tanda panah -> bikin kita susah untuk tau apakah proses dijalankan dari bagian paling atas ke bawah atau dari bagian yang paling menjorok ke dalam dulu.2. Hal yang membingungkan dari hasilnya adalah munculnya istilah HashAggregate, Hash Join, dan Seq Scan. Ketika membuat query SQL, kita hanya menuliskan perintah sederhana seperti JOIN, tetapi database mengubahnya jadi proses atau algoritma di balik layar. Tanpa memahami cara kerja database, susah untuk tau apa yang sebenarnya dilakukan oleh proses-proses tersebut terhadap tabel.Opsi 1: Fokus pada angka biaya (cost) atau biaya eksekusi.
+"Yang paling membuat bingung dari hasil ini adalah arti dari metrik cost atau biaya eksekusi. Dalam hasil tersebut, terdapat rentang angka seperti cost=238.57 hingga 633.47. Bagi pengguna yang baru memulai, tidak ada penjelasan sama sekali mengenai arti angka tersebut, apakah mengacu pada durasi waktu dalam milidetik, jumlah penggunaan memori dalam byte, atau indikator seberapa berat beban CPU yang digunakan oleh komputer. Ketidakjelasan dalam satuan ukur ini membuat hasilnya sulit untuk digambarkan secara nyata."Opsi 5 Jumlah Baris dan Perulangan
+“Yang paling membingungkan dari keluaran ini itu adalah ada informasi mengenai jumlah baris dan perulangan di setiap tahapan proses nya. Pada hasil tersebut ada rows yang menunjukkan jumlah baris yang diproses dan loops yang menunjukkan berapa kali suatu proses itu dijalankan. masih belum terlalu memahami kenapa informasi nya itu perlu ditampilkan di setiap tahapan dan bagaimana cara membacanya. juga masih bingung bagaimana jumlah baris dan perulangan nya itu bisa memengaruhi waktu yang dibutuhkan PostgreSQL untuk menjalankan query secara keseluruhan."
