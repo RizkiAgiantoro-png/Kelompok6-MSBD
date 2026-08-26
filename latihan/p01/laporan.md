@@ -100,3 +100,36 @@ Kalimat: “Yang paling membingungkan dari keluaran ini adalah ...”
 Hal membingungkan dari hasilnya adalah cara menentukan urutan prosesnya, karena tampilannya dibuat bertingkat. Adanya indentasi dan tanda panah -> bikin kita susah untuk tau apakah proses dijalankan dari bagian paling atas ke bawah atau dari bagian yang paling menjorok ke dalam dulu.2. Hal yang membingungkan dari hasilnya adalah munculnya istilah HashAggregate, Hash Join, dan Seq Scan. Ketika membuat query SQL, kita hanya menuliskan perintah sederhana seperti JOIN, tetapi database mengubahnya jadi proses atau algoritma di balik layar. Tanpa memahami cara kerja database, susah untuk tau apa yang sebenarnya dilakukan oleh proses-proses tersebut terhadap tabel.Opsi 1: Fokus pada angka biaya (cost) atau biaya eksekusi.
 "Yang paling membuat bingung dari hasil ini adalah arti dari metrik cost atau biaya eksekusi. Dalam hasil tersebut, terdapat rentang angka seperti cost=238.57 hingga 633.47. Bagi pengguna yang baru memulai, tidak ada penjelasan sama sekali mengenai arti angka tersebut, apakah mengacu pada durasi waktu dalam milidetik, jumlah penggunaan memori dalam byte, atau indikator seberapa berat beban CPU yang digunakan oleh komputer. Ketidakjelasan dalam satuan ukur ini membuat hasilnya sulit untuk digambarkan secara nyata."Opsi 5 Jumlah Baris dan Perulangan
 “Yang paling membingungkan dari keluaran ini itu adalah ada informasi mengenai jumlah baris dan perulangan di setiap tahapan proses nya. Pada hasil tersebut ada rows yang menunjukkan jumlah baris yang diproses dan loops yang menunjukkan berapa kali suatu proses itu dijalankan. masih belum terlalu memahami kenapa informasi nya itu perlu ditampilkan di setiap tahapan dan bagaimana cara membacanya. juga masih bingung bagaimana jumlah baris dan perulangan nya itu bisa memengaruhi waktu yang dibutuhkan PostgreSQL untuk menjalankan query secara keseluruhan."
+
+---
+
+ Informasi Repositori Git Tim dan Pembagian Tugas
+
+- **Tautan Repositori GitHub Tim:**  
+  [https://github.com/RizkiAgiantoro-png/Kelompok6-MSBD](https://github.com/RizkiAgiantoro-png/Kelompok6-MSBD)
+
+### Pembagian Tugas & Rincian Commit Anggota Kelompok:
+
+1. **Rizki Agiantoro**
+   - **Tugas:** Menyiapkan struktur awal direktori repositori tim, mengonfigurasi berkas `docker-compose.yml`, berkas `.gitignore`, berkas query `verifikasi.sql`, serta struktur dokumentasi proyek pada `proyek/docs/README.md`.
+   - **Pesan Commit:** 
+     - `chore: menyiapkan lingkungan MSBD`
+     - `chore: menambahkan konfigurasi gitignore`
+     - `feat: menambahkan file verifikasi sql v1-v4`
+     - `docs: menambahkan struktur dokumentasi proyek kelompok`
+
+2. **Daffa**
+   - **Tugas:** Menyusun laporan bagian keluaran perintah-perintah verifikasi awal (`docker --version`, `docker compose version`, `docker compose ps`, `SELECT version();`), serta penjelasan teori mengenai *Docker Image* dan *Docker Container*.
+   - **Pesan Commit:** `docs(daffa): menambahkan verifikasi docker dan teori image container`
+
+3. **Juda**
+   - **Tugas:** Menyusun laporan bagian teori mengenai *Volume*, serta dua pertanyaan awal pada Langkah 2 (dampak penghapusan volume dan penjelasan pemetaan port `5432:5432`).
+   - **Pesan Commit:** `docs(juda): menambahkan teori volume dan pertanyaan langkah 2`
+
+4. **Dennis**
+   - **Tugas:** Menyusun laporan bagian pertanyaan Langkah 2 mengenai fungsi *healthcheck* dan penyimpanan password menggunakan berkas `.env`, bagian perbandingan penggunaan `psql` vs DBeaver, serta menyertakan hasil query V1, V2, dan V3.
+   - **Pesan Commit:** `docs(dennis): menambahkan healthcheck, env, psql vs dbeaver, dan query v1-v3`
+
+5. **Rama**
+   - **Tugas:** Menyusun laporan bagian Hasil V4 (`EXPLAIN ANALYZE`) beserta keseluruhan penjabaran jawaban refleksi untuk kalimat *"Yang paling membingungkan dari keluaran ini adalah..."*.
+   - **Pesan Commit:** `docs(rama): menambahkan hasil explain analyze v4 dan analisis kalimat`
