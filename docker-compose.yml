@@ -20,14 +20,13 @@ services:
     image: flyway/flyway:11
     depends_on:
       - postgres
+    environment:
+      - FLYWAY_URL=jdbc:postgresql://postgres:5432/latihan
+      - FLYWAY_USER=msbd
+      - FLYWAY_PASSWORD=msbd2026
     volumes:
       - ./latihan/p02/migrations:/flyway/sql
-    command: >
-      -url=jdbc:postgresql://postgres:5432/latihan
-      -user=msbd
-      -password=msbd2026
-      -connectRetries=10
-      migrate
+    command: migrate
 
   mongo:
     image: mongo:8
