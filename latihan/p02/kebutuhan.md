@@ -52,7 +52,7 @@
 ### KD-06 Detail Item Dipinjam (Baris Pinjam)
 - Deskripsi : mencatat unit alat apa saja yang dibawa dalam satu transaksi peminjaman
 - Data      : id_peminjaman, id_unit, catatan_awal
-- Aturan    : satu transaksi bisa memuat banyak unit; unit dalam perbaikan tidak bisa dipinjam
+- Aturan    : satu transaksi dapat memuat banyak unit; unit dalam perbaikan tidak dapat dipinjam
 - Volume    : ±90 detail/hari
 - Sumber    : buku log peminjaman
 - Prioritas : wajib
@@ -60,7 +60,7 @@
 ### KD-07 Pengembalian Alat
 - Deskripsi : petugas mencatat pengembalian unit alat oleh peminjam
 - Data      : id_peminjaman, id_unit, tgl_kembali, kondisi_saat_kembali
-- Aturan    : keterlambatan dari jatuh_tempo otomatis memicu catatan denda; kondisi rusak memicu status perbaikan
+- Aturan    : hanya untuk peminjaman yang masih aktif; keterlambatan dikenakan denda; kondisi rusak memindahkan unit ke status perbaikan
 - Volume    : ±60 transaksi/hari
 - Sumber    : hasil wawancara
 - Prioritas : wajib

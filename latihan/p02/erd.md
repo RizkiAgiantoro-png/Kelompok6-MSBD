@@ -1,4 +1,4 @@
-KATEGORI ||--|{ ALAT : "mengelompokkan"
+    KATEGORI ||--o{ ALAT : "mengelompokkan"
     ALAT ||--|{ UNIT_ALAT : "memiliki"
     UNIT_ALAT ||--o{ PERBAIKAN : "menjalani"
     ANGGOTA ||--o{ PEMINJAMAN : "mengajukan"
@@ -6,41 +6,42 @@ KATEGORI ||--|{ ALAT : "mengelompokkan"
     UNIT_ALAT ||--o{ BARIS_PINJAM : "dipinjamkan"
 
     KATEGORI {
-        id_kategori PK
-        kode_kategori
-        nama_kategori
+        ID id_kategori PK
+        Field kode_kategori
+        Field nama_kategori
     }
     ALAT {
-        id_alat PK
-        nama_alat
-        merk
+        ID id_alat PK
+        Field nama_alat
+        Field merk
+        Field spesifikasi_singkat
     }
     UNIT_ALAT {
-        id_unit PK
-        nomor_seri
-        kondisi
-    }
-    ANGGOTA {
-        id_anggota PK
-        nomor_induk
-        nama
-        status
-    }
-    PEMINJAMAN {
-        id_peminjaman PK
-        tgl_pinjam
-        jatuh_tempo
-        petugas
-    }
-    BARIS_PINJAM {
-        id_peminjaman PK, FK
-        id_unit PK, FK
-        catatan_awal
-        kondisi_kembali
+        ID id_unit PK
+        Field nomor_seri
+        Field kondisi_saat_ini
     }
     PERBAIKAN {
-        id_perbaikan PK
-        tgl_mulai
-        deskripsi
+        ID id_perbaikan PK
+        Field tgl_mulai_perbaikan
+        Field deskripsi_kerusakan
+        Field estimasi_selesai
     }
-    
+    ANGGOTA {
+        ID id_anggota PK
+        Field nomor_induk
+        Field nama
+        Field status
+    }
+    PEMINJAMAN {
+        ID id_peminjaman PK
+        Field tgl_pinjam
+        Field jatuh_tempo
+    }
+    BARIS_PINJAM {
+        ID id_peminjaman PK,FK
+        ID id_unit PK,FK
+        Field catatan_awal
+        Field tgl_kembali
+        Field kondisi_saat_kembali
+    }
