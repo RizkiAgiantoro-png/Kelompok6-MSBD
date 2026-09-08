@@ -1,14 +1,31 @@
--- Diminta: Menampilkan nama pelanggan yang pernah melakukan pembayaran lebih dari 9.99 dalam satu transaksi.
--- Dipilih: Klausa EXISTS dengan correlated subquery, karena mesin basis data akan langsung berhenti mencari (short-circuit) begitu menemukan satu baris yang cocok, sehingga jauh lebih cepat.
--- Alternatif: Menggunakan JOIN dan DISTINCT; dilarang keras oleh aturan soal karena memaksa basis data menggabungkan seluruh baris pembayaran terlebih dahulu yang akan memboroskan memori.
+-- Diminta: menampilkan kategori yang memiliki lebih dari 60 film.
+-- Dipilih: derived table dan HAVING ditampilkan untuk membandingkan keterbacaan.
+-- Alternatif: hanya menggunakan HAVING; tidak dipilih sebagai satu-satunya versi karena soal meminta perbandingan.
 
+-- Versi 1: Derived Table
 SELECT
-    first_name,
-    last_name
-FROM customer c
-WHERE EXISTS (
-    SELECT 1
-    FROM payment p
-    WHERE p.customer_id = c.customer_id
-      AND p.amount > 9.99
-);
+    x.name AS kategori,
+    x.jumlah_film
+FROM (
+    SELECT
+        c.name,
+        COUNT(*) AS jumlah_film
+    FROM category c
+    JOIN film_category fc
+        ON fc.category_id = c.category_id
+    GROUP BY c.category_id, c.name
+) AS x
+WHERE x.jumlah_film > 60
+ORDER BY x.jumlah_film DESC, x.name;
+
+
+-- Versi 2: HAVING
+SELECT
+    c.name AS kategori,
+    COUNT(*) AS jumlah_film
+FROM category c
+JOIN film_category fc
+    ON fc.category_id = c.category_id
+GROUP BY c.category_id, c.name
+HAVING COUNT(*) > 60
+ORDER BY jumlah_film DESC, kategori;

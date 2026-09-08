@@ -1,24 +1,31 @@
--- Diminta: Menampilkan nama kategori beserta jumlah filmnya, khusus untuk kategori yang memiliki lebih dari 60 film.
--- Dipilih: Klausa HAVING dengan agregasi GROUP BY, karena sintaksnya lebih natural, ringkas, dan mudah dibaca untuk menyaring hasil agregat.
--- Alternatif: Menggunakan derived table (subquery di FROM); disertakan sebagai komentar pembanding di bawah, namun kurang efisien karena membuat blok kueri berlapis tanpa keuntungan performa.
+-- Diminta: menampilkan kategori yang memiliki lebih dari 60 film.
+-- Dipilih: derived table dan HAVING ditampilkan untuk membandingkan keterbacaan.
+-- Alternatif: hanya menggunakan HAVING; tidak dipilih sebagai satu-satunya versi karena soal meminta perbandingan.
 
--- Versi Utama (HAVING):
+-- Versi 1: Derived Table
 SELECT
-    c.name AS nama_kategori,
-    count(fc.film_id) AS jumlah_film
-FROM category c
-JOIN film_category fc ON c.category_id = fc.category_id
-GROUP BY c.name
-HAVING count(fc.film_id) > 60;
-
-/*
--- Versi Alternatif (Derived Table di FROM):
-SELECT nama_kategori, jumlah_film
+    x.name AS kategori,
+    x.jumlah_film
 FROM (
-    SELECT c.name AS nama_kategori, count(fc.film_id) AS jumlah_film
+    SELECT
+        c.name,
+        COUNT(*) AS jumlah_film
     FROM category c
-    JOIN film_category fc ON c.category_id = fc.category_id
-    GROUP BY c.name
-) AS rekap_kategori
-WHERE jumlah_film > 60;
-*/
+    JOIN film_category fc
+        ON fc.category_id = c.category_id
+    GROUP BY c.category_id, c.name
+) AS x
+WHERE x.jumlah_film > 60
+ORDER BY x.jumlah_film DESC, x.name;
+
+
+-- Versi 2: HAVING
+SELECT
+    c.name AS kategori,
+    COUNT(*) AS jumlah_film
+FROM category c
+JOIN film_category fc
+    ON fc.category_id = c.category_id
+GROUP BY c.category_id, c.name
+HAVING COUNT(*) > 60
+ORDER BY jumlah_film DESC, kategori;
