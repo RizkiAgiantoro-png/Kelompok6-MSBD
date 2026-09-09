@@ -2,19 +2,13 @@
 
 ## Anggota dan Kontribusi
 
-| Nama |NIM | Kontribusi |
-| Commit |
-
-| Mochamad Rizki Agiantoro | 251402135 |
-|commit |
-| Ramadiyan Athallah Kusuma | 251402027 |
-|commit |
-| Juda Benhur Turnip | 251402096 |
-|commit |
-| Dennis Pamungkas Panjaitan | 251402076 | 
-|commit |
-| Daffa Umayans Saragih | 251402011 |
- commit set up.sql, langkah 3 q1-q5,langkah 4 q6-q9,serta mengerjakan bagian untuk laporan yang terkait dengan commit-commit tersebut | |
+| Nama | NIM | Kontribusi | Commit |
+|---|---:|---|---|
+| Mochamad Rizki Agiantoro | 251402135 | Isi kontribusi | Isi hash commit |
+| Ramadiyan Athallah Kusuma | 251402027 | Isi kontribusi | Isi hash commit |
+| Juda Benhur Turnip | 251402096 | Isi kontribusi | Isi hash commit |
+| Dennis Pamungkas Panjaitan | 251402076 | Isi kontribusi | Isi hash commit |
+| Daffa Umayans Saragih | 251402011 | Setup, Q1-Q9, dan bagian laporan terkait | Isi hash commit |
 
 Catatan: Pengerjaan Langkah 1 hingga Langkah 4 diambil alih sementara di awal untuk memastikan proyek kelompok tetap berjalan lancar.
 
@@ -47,13 +41,35 @@ Mengganti UNION ALL dengan UNION bisa menghentikan siklus karena operasi UNION s
 ---
 
 ## Refleksi C - Window Function
-(Belum dikerjakan)
+Pada Q14, `RANGE` memasukkan seluruh baris peer dengan nilai pengurutan yang sama, sedangkan `ROWS` menghitung berdasarkan posisi baris. Karena Q13 dan Q14 lebih dulu meringkas payment menjadi satu baris per tanggal, tanggalnya unik dan hasil kedua frame sama. Untuk laporan keuangan, frame `ROWS` eksplisit lebih aman karena maksud perhitungan per baris dinyatakan dengan jelas.
+
+Pada Q15, menambahkan `ORDER BY` tanpa frame membuat PostgreSQL memakai frame default `RANGE ... CURRENT ROW`. Total yang seharusnya menjadi total seluruh pelanggan dapat berubah menjadi total berjalan. Karena itu query Q15 menuliskan frame sampai `UNBOUNDED FOLLOWING`.
 
 ## Refleksi D - Agregasi dan Operasi Himpunan
-(Belum dikerjakan)
+`GROUPING()` diperlukan untuk membedakan NULL yang dibuat oleh `ROLLUP` sebagai subtotal atau grand total dari NULL yang memang berasal dari data. Tanpa `GROUPING()`, kedua kondisi tersebut terlihat sama bagi pembaca.
+
+`FILTER` dan `CASE WHEN` dapat berbeda jika CASE mengisi baris yang tidak memenuhi syarat dengan nilai seperti nol. Nilai tersebut ikut dihitung oleh agregat. Pada Q17, CASE tidak memiliki `ELSE`, sehingga menghasilkan NULL dan hasil rata-ratanya setara dengan versi `FILTER`.
 
 ## Refleksi E - JSONB
-(Belum dikerjakan)
+Nomor transaksi, status, jumlah, dan identitas pelanggan sebaiknya menjadi kolom relasional jika sering dipakai untuk pencarian, join, laporan, atau constraint. Nomor transaksi dapat diberi UNIQUE, status dapat diberi CHECK, jumlah dapat diberi tipe numerik, dan identitas pelanggan dapat diberi foreign key.
+
+Data fleksibel seperti metadata tambahan dan array kontak masih sesuai disimpan dalam JSONB. Jika kontak mulai sering dicari, divalidasi, atau dihubungkan dengan tabel lain, array tersebut lebih tepat dipromosikan menjadi tabel relasional terpisah.
 
 ## Temuan Q14
-(Belum dikerjakan)
+Hasil perbandingan Q14 menunjukkan `jumlah_tanggal_berbeda = 0`. Hal ini terjadi karena CTE `harian` lebih dulu menggabungkan payment menjadi satu baris untuk setiap tanggal, sehingga tidak ada peer dengan nilai `tanggal` yang sama pada window. Dengan urutan tanggal yang unik, frame `ROWS` dan `RANGE` menghasilkan running total yang sama.
+
+## Hasil R1
+![Sepuluh baris pertama](r1_10_baris.png)
+
+R1 berhasil dijalankan pada Pagila PostgreSQL 17 dan menghasilkan laporan pendapatan bulanan per kategori dengan pendapatan, peringkat, pendapatan bulan sebelumnya, pertumbuhan, kumulatif, dan porsi bulanan.
+
+## Pemeriksaan Akhir
+- PostgreSQL 17 dan Pagila berhasil diverifikasi.
+- Q00 dapat dijalankan ulang untuk membuat tabel bantu.
+- Q10-Q20 dan R1 sudah dijalankan dengan `ON_ERROR_STOP=1`.
+- Q14 mencatat `jumlah_tanggal_berbeda = 0`.
+- Screenshot sepuluh baris pertama R1 tersedia.
+- Isi kontribusi dan hash commit anggota masih harus dilengkapi berdasarkan riwayat Git.
+
+## Tautan Merge Request
+[Isi tautan merge request di sini]
