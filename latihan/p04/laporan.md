@@ -29,3 +29,18 @@ Keterbatasan operasi tulis (INSERT/UPDATE/DELETE), di mana tidak semua view bers
 
 Keadaan konkret yang mempersulit:
 Ketika aplikasi bisnis menuntut pengguna untuk bisa memasukkan (INSERT) data secara langsung ke halaman laporan analitik. Karena view laporan tersebut menggunakan fungsi agregat seperti GROUP BY atau sistem window, view akan otomatis menolak operasi tulis. Tim database harus bekerja ekstra menulis trigger INSTEAD OF yang sangat kompleks hanya agar aplikasi bisa melakukan modifikasi data standar.
+
+Refleksi B 
+
+1. Penggunaan Materialized View (Q05–Q07):
+   - Materialized View sangat efektif untuk menyimpan hasil query agregasi/kompleks secara fisik di disk, sehingga mempercepat performa pembacaan data (`SELECT`).
+   - Saat membuat Materialized View dengan klausul `WITH NO DATA`, tabel view tidak dapat diakses sebelum dilakukan perintah `REFRESH MATERIALIZED VIEW`.
+   - Untuk menjalankan pembaruan data secara fleksibel menggunakan `REFRESH MATERIALIZED VIEW CONCURRENTLY`, PostgreSQL mewajibkan adanya setidaknya satu `UNIQUE INDEX` (tanpa klausul `WHERE`) pada kolom Materialized View tersebut.
+
+2. Pengujian Akses Pembaca (Q08):
+   - Fitur `CONCURRENTLY` terbukti mencegah *exclusive lock* pada tabel view.
+   - Proses pembaruan data berjalan di latar belakang (background), sehingga transaksi pembacaan (`SELECT`) dari pengguna/aplikasi lain tetap dapat berjalan lancar tanpa mengalami *blocking*.
+
+3. Implementasi Migration 0042 (Dual-Write Trigger):
+   - *Trigger* berhasil dibuat untuk menangani skenario sinkronisasi otomatis (*dual-write*).
+   - Setiap kali terjadi perubahan nilai `rental_rate` pada tabel utama `film`, fungsi *trigger* secara otomatis memperbarui nilai harga yang setara pada tabel `harga_film`.
