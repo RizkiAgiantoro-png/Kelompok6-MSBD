@@ -44,3 +44,22 @@ Refleksi B
 3. Implementasi Migration 0042 (Dual-Write Trigger):
    - *Trigger* berhasil dibuat untuk menangani skenario sinkronisasi otomatis (*dual-write*).
    - Setiap kali terjadi perubahan nilai `rental_rate` pada tabel utama `film`, fungsi *trigger* secara otomatis memperbarui nilai harga yang setara pada tabel `harga_film`.
+
+   Refleksi C
+   1. Perbandingan Trigger Row-Level dan Statement-Level
+   Berdasarkan Q12 dan Q13, terdapat perbedaan pada cara trigger dijalankan. Row-level trigger berjalan untuk setiap baris yang mengalami perubahan. Pada Q12, UPDATE terhadap 1.000 baris menyebabkan trigger row-level dipanggil untuk setiap baris tersebut.
+   Sementara itu, statement-level trigger berjalan satu kali untuk satu statement, meskipun statement tersebut mengubah banyak baris. Pada Q13 digunakan transition table untuk memperoleh kumpulan baris lama dan baru yang terkena perubahan. Dengan demikian, statement-level trigger dapat memproses perubahan secara berkelompok.
+
+   2. Hasil Benchmark
+   Hasil pengukuran waktu eksekusi pada percobaan adalah:
+   Trigger row-level aktif: 56.446 ms
+   Trigger row-level disabled: 22.032 ms
+   Trigger statement-level: 41.357 ms
+   Hasil tersebut menunjukkan bahwa penggunaan trigger menambah waktu eksekusi UPDATE. Row-level trigger memiliki overhead lebih besar karena function trigger dijalankan untuk setiap baris yang berubah. Pada percobaan ini, statement-level trigger memiliki waktu eksekusi lebih rendah dibandingkan row-level trigger aktif karena trigger hanya dijalankan satu kali untuk satu statement dan perubahan dapat diproses melalui transition table.
+
+   3. Satu Kemampuan yang Tidak Dimiliki Statement-Level Trigger
+   Statement-level trigger tidak secara langsung memiliki konteks OLD dan NEW untuk setiap baris seperti row-level trigger. Untuk mengetahui kumpulan baris yang berubah, statement-level trigger dapat menggunakan transition table, yaitu tabel sementara yang merepresentasikan kumpulan data lama dan data baru dari statement tersebut.
+
+   4. Mengapa Mengirim Email Langsung dari Trigger Buruk?
+   Mengirim email secara langsung dari trigger kurang baik karena trigger berjalan di dalam transaksi database. Jika transaksi kemudian mengalami ROLLBACK, perubahan pada database dapat dibatalkan, tetapi efek eksternal seperti email yang sudah dikirim tidak otomatis ikut dibatalkan. Hal tersebut dapat menyebabkan penerima memperoleh email yang seolah-olah menyatakan perubahan berhasil, padahal transaksi database sebenarnya gagal.
+   Oleh karena itu, efek eksternal seperti pengiriman email lebih baik dilakukan melalui mekanisme asynchronous setelah transaksi database berhasil.
