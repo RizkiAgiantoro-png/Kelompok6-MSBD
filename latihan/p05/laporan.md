@@ -1,0 +1,4 @@
+Refleksi A
+Pada Q3, transaksi dimulai dan diakhiri secara otomatis oleh PostgreSQL. Buktinya bisa dilihat dari jumlah data di tabel rental_tx. Saat pemanggilan procedure gagal akibat pelanggaran constraint nilai negatif pada pembayaran, baris data penyewaan sama sekali tidak bertambah. Ini membuktikan bahwa sistem database secara otomatis melakukan rollback terhadap seluruh perintah yang ada di dalam blok procedure tersebut.
+
+Sedangkan pada Q4, transaksi dimulai oleh aplikasi luar, yaitu Python melalui library psycopg. Bukti dari hal ini adalah munculnya error invalid transaction termination ketika procedure mencoba melakukan perintah COMMIT di tengah-tengah eksekusi. Error ini membuktikan bahwa PostgreSQL menolak COMMIT dari dalam procedure karena ia mendeteksi transaksi tersebut dibuka oleh Python, sehingga yang berhak mengakhiri atau menutup transaksinya hanyalah Python itu sendiri, bukan basis datanya.
