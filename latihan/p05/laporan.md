@@ -84,3 +84,37 @@ Pada Q3, rollback dipicu oleh galat dari basis data ketika procedure menerima ko
 Persamaannya adalah perubahan yang masih berada dalam transaksi dibatalkan sehingga keadaan database kembali seperti sebelum transaksi.
 
 Salah satu hal yang dapat dilakukan sisi aplikasi adalah menangkap exception dan menentukan bagaimana error tersebut diterjemahkan atau ditangani oleh alur aplikasi, misalnya mengubahnya menjadi respons atau pesan yang sesuai kepada pengguna.git status
+
+## Refleksi D
+
+### Q17–Q19
+
+Pada Q17 digunakan lazy loading sehingga ketika relationship `rentals` diakses untuk setiap customer, SQLAlchemy menjalankan query tambahan untuk masing-masing customer. Dari hasil eksekusi terlihat 1 query untuk mengambil 10 customer dan 10 query tambahan untuk mengambil rental. Hal ini menunjukkan pola N+1 query.
+
+Pada Q18 digunakan `selectinload()`. SQLAlchemy mengambil data customer menggunakan satu query dan data rental menggunakan satu query tambahan dengan kondisi `IN`. Dengan demikian, untuk 10 customer hanya digunakan 2 query utama.
+
+Pada Q19 digunakan `joinedload()`. SQLAlchemy mengambil data customer dan rental menggunakan `LEFT OUTER JOIN` dalam satu query. Hasil log SQL menunjukkan bahwa relationship rental dimuat bersamaan dengan data customer.
+
+### Q20
+
+Q20 membandingkan hasil query untuk mencari lima film yang paling sering disewa menggunakan SQLAlchemy dan SQL mentah.
+
+Hasil keduanya sama, yaitu:
+
+1. BUCKET BROTHERHOOD: 34 rental
+2. ROCKETEER MOTHER: 33 rental
+3. GRIT CLOCKWORK: 32 rental
+4. RIDGEMONT SUBMARINE: 32 rental
+5. FORWARD TEMPLE: 32 rental
+
+Waktu eksekusi SQLAlchemy:
+
+`0.053829 detik`
+
+Waktu eksekusi SQL mentah:
+
+`0.054719 detik`
+
+Hasil pengujian menunjukkan bahwa kedua pendekatan menghasilkan data yang sama dengan waktu eksekusi yang sangat berdekatan. SQLAlchemy memudahkan integrasi query dengan kode aplikasi, sedangkan SQL mentah memberikan kontrol langsung terhadap perintah SQL yang dijalankan.
+
+`selectinload()` dapat digunakan ketika relationship ingin dimuat dengan query terpisah menggunakan `IN`, sedangkan `joinedload()` dapat digunakan ketika relationship ingin dimuat menggunakan JOIN dalam query utama. Pemilihan pendekatan bergantung pada kebutuhan query dan jumlah data yang diproses.
