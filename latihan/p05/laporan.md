@@ -74,3 +74,13 @@ Antara kolom `tags` (Array) dan `metadata` (JSONB):
 - **Pertanyaan Bisnis yang Mengubah Keputusan**:
   - *"Apakah manajemen membutuhkan laporan analitik terpusat dengan validasi data tag/metadata yang ketat dan relasi ke entitas bisnis lainnya?"*
   - Jika ya, maka data `tags` atau `metadata` harus direfaktor/dipindahkan dari kolom array/JSONB ke tabel relasional terpisah (seperti `rental_tags` atau `rental_metadata_attributes`).
+
+  ## Refleksi C
+
+Q3 dan Q13 sama-sama menunjukkan rollback transaksi, tetapi mekanisme pemicunya berbeda.
+
+Pada Q3, rollback dipicu oleh galat dari basis data ketika procedure menerima kondisi yang tidak valid. Pada Q13, rollback dipicu oleh exception yang dilempar dari sisi aplikasi Python sebelum transaksi selesai.
+
+Persamaannya adalah perubahan yang masih berada dalam transaksi dibatalkan sehingga keadaan database kembali seperti sebelum transaksi.
+
+Salah satu hal yang dapat dilakukan sisi aplikasi adalah menangkap exception dan menentukan bagaimana error tersebut diterjemahkan atau ditangani oleh alur aplikasi, misalnya mengubahnya menjadi respons atau pesan yang sesuai kepada pengguna.git status
