@@ -127,11 +127,69 @@ VACUUM memperbarui visibility map pada tabel. Jika halaman heap sudah ditandai s
 
 
 Langkah 5 (Q17 sampai Q21)
-Dilanjutkan oleh Anggota 4
+
+Q17 - GIN pada JSONB
+Dibuat GIN Index `ev_payload_gin_idx` menggunakan `jsonb_path_ops` pada kolom `payload`.
+- Ukuran Heap Tabel: 458 MB
+- Ukuran GIN Index (`ev_payload_gin_idx`): 7.096 kB (~7,1 MB, hanya 1,5% dari ukuran heap).
+- Plan & Hasil Query: PostgreSQL menggunakan `Bitmap Index Scan` pada `ev_payload_gin_idx` dilanjutkan dengan `Bitmap Heap Scan`.
+- Waktu Eksekusi: 262.616 ms dengan `shared hit=3 read=58587`.
+GIN `jsonb_path_ops` jauh lebih hemat ruang karena hanya menyimpan hash dari path dan value JSONB yang digunakan dalam pencarian operator `@>`.
+
+Q18 - GIN pada Array
+Dilakukan pengujian query `tags @> ARRAY['kanal:1']` dengan dan tanpa GIN Index (`ev_tags_gin_idx`).
+- Dengan GIN Index (`Bitmap Index Scan`): Execution Time = 239.944 ms (Buffers: `shared hit=1 read=58644`).
+- Tanpa Index (`Seq Scan`): Execution Time = 326.577 ms (Buffers: `shared hit=16341 read=42235`).
+Penggunaan GIN Index mempercepat pencarian elemen di dalam array bertipe text dengan memfilter halaman secara efisien via bitmap.
+
+Q19 - Ukuran BRIN vs B-Tree & Correlation
+- Nilai `correlation` untuk kolom `terjadi_pada` pada katalog `pg_stats` bernilai `1` (korelasi fisik sempurna karena data di-generate dengan urutan timestamp naik).
+- Ukuran BRIN Index (`ev_terjadi_pada_brin_idx`): 32 kB
+- Ukuran B-Tree Index (`ev_terjadi_pada_btree_idx`): 43 MB
+- BRIN Index berukuran lebih dari 1.300x lebih kecil daripada B-Tree Index karena BRIN hanya menyimpan sepasang nilai minimum dan maksimum per range halaman (128 halaman), bukan entri untuk setiap baris.
+
+Q20 - Pengujian Rentang 7 Hari (BRIN vs B-Tree)
+Pengujian query pencarian rentang 7 hari pada 2.000.000 baris:
+- BRIN Index (`Bitmap Heap Scan` via `ev_terjadi_pada_brin_idx`): Execution Time = 12.350 ms, Buffers read/hit = 1.545 blocks.
+- B-Tree Index (`Index Scan` via `ev_terjadi_pada_btree_idx`): Execution Time = 6.553 ms, Buffers read/hit = 1.671 blocks.
+B-Tree sedikit lebih cepat (6,55 ms vs 12,35 ms) karena dapat melompati langsung ke halaman spesifik tanpa Recheck Cond. Namun, BRIN mencapai performa yang sangat dekat (12,35 ms) hanya dengan konsumsi memori 32 kB dibanding 43 MB pada B-Tree.
+
+Q21 Reflektif - Rasionalisasi Penggunaan BRIN
+Penghematan ukuran BRIN (hanya berukuran beberapa puluh kilobytes) sangat sepadan digunakan apabila:
+1. Kolom data bertipe time-series atau append-only dengan korelasi fisik yang sangat tinggi mendekati 1.0 (seperti log kejadian / transaksi).
+2. Ukuran tabel sangat besar (puluhan/ratusan GB) di mana simpanan RAM/Disk terbatas, dan selisih waktu eksekusi beberapa milidetik masih dalam ambang toleransi aplikasi.
 
 
 Langkah 6 (Q22 sampai Q26)
-Dilanjutkan oleh Anggota 4
+
+Q22 - Selektivitas Status
+Dibuat index `ev_status_idx` pada kolom `status`. Hasil pengujian:
+- `status = 'SUKSES'` (~84% data / 1.680.000 baris): Query Planner memilih `Seq Scan` (Execution Time = 605.160 ms).
+- `status = 'GAGAL'` (~2% data / 40.000 baris): Query Planner memilih `Bitmap Index Scan` (Execution Time = 1166.755 ms).
+Optimizer memilih Seq Scan pada nilai mayoritas karena membaca halaman secara berurutan jauh lebih murah dibanding membaca index yang mengarahkan ke hampir 100% halaman heap secara acak.
+
+Q23 & Q24 - Titik Peralihan Selektivitas & Dampak random_page_cost
+- Distribusi Data: `SUKSES` (84,00%), `TERTUNDA` (14,00%), `GAGAL` (2,00%).
+- Pada `random_page_cost` default (4.0), query dengan `status = 'TERTUNDA'` (14%) menggunakan `Bitmap Heap Scan` dengan Execution Time = 1088.108 ms.
+- Saat `random_page_cost` diturunkan menjadi `1.1` (Q24), optimizer beralih menggunakan pure `Index Scan using ev_status_idx` (estimasi cost turun dari 65.245 menjadi 40.863), dan Execution Time berkurang drastis menjadi 133.236 ms.
+Penurunan `random_page_cost` membuat optimizer menganggap pembacaan halaman acak di disk/RAM hampir se-murah pembacaan berurutan, sehingga memicu pergeseran titik transisi ke arah penggunaan Index Scan.
+
+Q25 - Extended Statistics (wilayah-kota)
+Dilakukan perbandingan estimasi baris pada query `WHERE wilayah = 'SUMUT' AND kota = 'SUMUT-1'`:
+- Sebelum Extended Statistics:
+  - Rows Estimated: 9.314 baris
+  - Rows Actual: 44.444 baris (Terdapat kesalahan estimasi ~4,77x karena PostgreSQL mengasumsikan kedua kolom independen).
+- Sesudah Extended Statistics (`CREATE STATISTICS ev_wil_kota_stat (dependencies, ndistinct)` + `ANALYZE`):
+  - Rows Estimated: 43.730 baris
+  - Rows Actual: 44.444 baris (Estimasi hampir 100% akurat).
+
+Q26 Reflektif - Ambang Peralihan Selektivitas
+Titik peralihan dari Index Scan ke Sequential Scan bukan merupakan angka persentase tetap (misalnya tidak selalu di 10% atau 15%) karena ambang batas tersebut dihitung secara dinamis oleh Query Planner berdasarkan:
+1. Nilai `random_page_cost` dibanding `seq_page_cost`.
+2. Jumlah tuple per halaman (kepadatan baris).
+3. Korelasi fisik data pada disk.
+4. Ukuran total tabel dan ketersediaan cache buffer memori.
+
 
 
 Langkah 7 (Q27 sampai Q31)
