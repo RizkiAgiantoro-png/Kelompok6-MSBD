@@ -68,6 +68,62 @@ Dilanjutkan oleh Anggota 2
 
 Langkah 4 (Q12 sampai Q16)
 Dilanjutkan oleh Anggota 3
+Langkah 4 (Q12 sampai Q16) - Ramadiyan
+
+Q12 - Partial Index
+
+Dibuat Partial Index `ev_gagal_idx` pada kolom `terjadi_pada` dengan kondisi `status = 'GAGAL'`, kemudian dibandingkan dengan index biasa `ev_terjadi_pada_idx`.
+
+Hasil:
+- `ev_gagal_idx` = 896 kB
+- `ev_terjadi_pada_idx` = 43 MB
+- Penghematan = 97,96%
+
+Partial Index jauh lebih kecil karena hanya menyimpan baris dengan `status = 'GAGAL'`.
+
+Q13 - Expression Index
+
+Dibuat Expression Index:
+
+```sql
+CREATE INDEX ev_email_lower_idx
+ON lab6.event_log (lower(email));
+
+Q14 - Covering Index
+Dibuat Covering Index:
+
+CREATE INDEX ev_cover_idx
+ON lab6.event_log (customer_id)
+INCLUDE (terjadi_pada, jumlah);
+
+Query menggunakan Index Only Scan.
+
+Sebelum VACUUM:
+Heap Fetches = 0
+Execution Time = 0.294 ms
+
+Sesudah VACUUM (ANALYZE):
+Heap Fetches = 0
+Execution Time = 0.110 ms
+
+Q15 - Perbandingan Index INCLUDE dan 3 Kolom
+
+Ukuran ev_cover_idx dengan INCLUDE:
+77 MB
+
+Ukuran ev_cover_3col_idx:
+77 MB
+
+Hasil execution plan menggunakan:
+Index Only Scan
+Index: ev_cover_3col_idx
+Heap Fetches = 0
+Execution Time = 0.212 ms
+
+Pada pengujian ini, kedua index memiliki ukuran yang sama.
+
+Q16 - Pengaruh VACUUM terhadap Heap Fetches
+VACUUM memperbarui visibility map pada tabel. Jika halaman heap sudah ditandai sebagai all-visible, PostgreSQL dapat mengambil data langsung dari index melalui Index Only Scan tanpa perlu memeriksa heap. Oleh karena itu, jumlah Heap Fetches dapat berkurang atau menjadi 0.
 
 
 Langkah 5 (Q17 sampai Q21)
