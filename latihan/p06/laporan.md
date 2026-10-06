@@ -5,7 +5,7 @@ Identitas Kelompok dan Kontribusi Commit
 2. Anggota 2 : Langkah 3 (Q7 - Q11)
 3. Anggota 3 : Langkah 4 (Q12 - Q16)
 4. Anggota 4 : Langkah 5 (Q17 - Q21) dan Langkah 6 (Q22 - Q26)
-5. Anggota 5 : Langkah 7 (Q27 - Q31) dan Finalisasi
+5. Mochamad Rizki Agiantoro : Langkah 7 (Q27 - Q31) dan Finalisasi
 
 
 Kondisi Uji
@@ -192,16 +192,97 @@ Titik peralihan dari Index Scan ke Sequential Scan bukan merupakan angka persent
 
 
 
-Langkah 7 (Q27 sampai Q31)
-Dilanjutkan oleh Anggota 5
+## Langkah 7 — Harga Tulis dan Rekomendasi Index
 
+Q27 — Harga Tulis Index
 
-Tabel Perbandingan
-Query/index | Tercepat | Median | Buffers | Ukuran | Keputusan
+Pengujian Q27 bertujuan mengukur pengaruh jumlah index terhadap biaya operasi `INSERT`. Pengujian dilakukan dengan memasukkan 200.000 baris ke dua tabel: satu tabel tanpa index dan satu tabel dengan lima index. Masing-masing kondisi diuji sebanyak tiga kali.
 
+**Hasil pengukuran:**
 
-Rekomendasi Akhir
-Dilanjutkan oleh Anggota 5
+| Kondisi        |       Run 1 |       Run 2 |       Run 3 |        Tercepat |          Median |
+| -------------- | ----------: | ----------: | ----------: | --------------: | --------------: |
+| Tanpa index    |  848.287 ms |  607.452 ms |  694.427 ms |  **607.452 ms** |  **694.427 ms** |
+| Dengan 5 index | 4568.800 ms | 3848.288 ms | 3791.625 ms | **3791.625 ms** | **3848.288 ms** |
+
+Berdasarkan nilai median, waktu `INSERT` dengan lima index meningkat dari 694.427 ms menjadi 3848.288 ms. Persentase kenaikannya adalah:
+
+`((3848.288 - 694.427) / 694.427) × 100% = 454.17%`
+
+Dengan demikian, penggunaan lima index menyebabkan waktu `INSERT` sekitar **454.17% lebih lama** dibandingkan kondisi tanpa index, atau sekitar **5.54 kali** waktu kondisi tanpa index.
+
+Dari sisi buffer, kondisi dengan lima index juga menunjukkan aktivitas buffer yang jauh lebih besar. Pada kondisi tanpa index, terdapat sekitar 211.761 shared buffer hits, sedangkan kondisi dengan lima index mencapai sekitar 1.925.600 shared buffer hits. Jumlah buffer yang mengalami perubahan (`dirtied`) juga meningkat dari sekitar 5.885 menjadi 10.026. Hal ini menunjukkan adanya biaya tambahan untuk memelihara struktur index ketika data baru dimasukkan.
+
+**Kesimpulan Q27:** index mempercepat pencarian data, tetapi setiap `INSERT` harus memperbarui struktur index yang relevan. Semakin banyak index yang dipasang, semakin besar pula biaya tulis yang harus dibayar.
+
+---
+
+Q28 — Harga Penyimpanan Index
+
+Q28 membandingkan ukuran tabel ketika tidak memiliki index dengan tabel yang memiliki lima index.
+
+| Kondisi        | Table Size | Index Size | Total Size |
+| -------------- | ---------: | ---------: | ---------: |
+| Tanpa index    |      46 MB |    0 bytes |  **46 MB** |
+| Dengan 5 index |      46 MB |      32 MB |  **78 MB** |
+
+Ukuran data tabel tetap sama, yaitu 48.242.688 bytes atau sekitar 46 MB. Perbedaan ukuran berasal dari index yang membutuhkan tambahan ruang sebesar 33.939.456 bytes atau sekitar 32 MB.
+
+Secara keseluruhan, penambahan lima index meningkatkan ukuran penyimpanan dari 46 MB menjadi 78 MB, atau sebesar **70.35%**.
+
+**Kesimpulan Q28:** index tidak menambah ukuran heap table, tetapi membutuhkan ruang penyimpanan tambahan. Pada pengujian ini, lima index menambah kebutuhan penyimpanan sekitar 70.35%.
+
+---
+
+Q29 — Statistik Penggunaan Index
+
+Q29 digunakan untuk melihat statistik penggunaan index pada `lab6.event_log`. Berdasarkan query pada `q29_statistik_index.sql`, objek yang diperiksa memang dibatasi dengan kondisi:
+
+`schemaname = 'lab6' AND relname = 'event_log'`
+
+Hasil pengukuran menunjukkan:
+
+| Index            | idx_scan | idx_tup_read | idx_tup_fetch | Ukuran |
+| ---------------- | -------: | -----------: | ------------: | -----: |
+| `event_log_pkey` |        1 |    2.000.000 |             0 |  43 MB |
+
+Pada kondisi pengujian saat ini, hanya terdapat `event_log_pkey` pada tabel `event_log`. Nilai `idx_scan` sebesar 1 menunjukkan bahwa index tersebut telah digunakan satu kali dalam statistik yang tercatat. Tidak terdapat index pada `event_log` yang memiliki `idx_scan = 0`.
+
+Namun, nilai `idx_scan` yang rendah **tidak menjadi alasan untuk menghapus `event_log_pkey`**, karena index tersebut merupakan bagian dari primary key tabel dan berfungsi menjaga keunikan `event_id`. Dengan demikian, keputusan terhadap primary key tidak hanya didasarkan pada frekuensi pemakaian untuk pencarian query.
+
+---
+
+Q30 — Rekomendasi Index
+
+Berdasarkan hasil Q27 sampai Q29, index harus dinilai dari dua sisi, yaitu **manfaat pembacaan data** dan **biaya penulisan serta penyimpanan**.
+
+Untuk `event_log`, `event_log_pkey` **dipertahankan** karena merupakan primary key. Walaupun `idx_scan` yang tercatat hanya 1, index tersebut memiliki fungsi integritas data sehingga tidak tepat dihapus hanya berdasarkan statistik pemakaian.
+
+Sementara itu, index tambahan sebaiknya hanya dipertahankan apabila memiliki manfaat yang terukur terhadap query yang memang sering digunakan. Hasil Q27 menunjukkan bahwa lima index tambahan memberikan biaya tulis yang cukup besar: median `INSERT` meningkat menjadi **3848.288 ms**, dibandingkan **694.427 ms** tanpa index, atau naik **454.17%**.
+
+Dari sisi penyimpanan, lima index juga menambah sekitar **32 MB** ruang index dan meningkatkan total ukuran tabel dari **46 MB menjadi 78 MB**, atau naik **70.35%**.
+
+Dengan demikian, rekomendasi akhir adalah:
+
+1. **Pertahankan `event_log_pkey`** karena merupakan primary key dan diperlukan untuk integritas data.
+2. **Pertahankan index tambahan hanya jika terbukti memberikan keuntungan query yang signifikan** berdasarkan hasil Q7–Q26.
+3. **Hapus index yang terbukti tidak digunakan atau redundan**, selama index tersebut bukan bagian dari constraint yang diperlukan.
+4. **Hindari memasang terlalu banyak index pada tabel yang sering menerima `INSERT`**, karena hasil Q27 menunjukkan biaya tulis meningkat secara signifikan.
+5. Jika dua index memiliki fungsi yang tumpang tindih, pertimbangkan **menggabungkannya menjadi satu index yang dapat melayani beberapa kebutuhan query**, selama hasil `EXPLAIN (ANALYZE, BUFFERS)` menunjukkan bahwa performanya tetap memenuhi kebutuhan.
+
+---
+
+Q31 — Refleksi dan Dasar Keputusan
+
+Keputusan mempertahankan atau menghapus index harus didasarkan pada angka hasil pengukuran, bukan hanya pada asumsi bahwa semakin banyak index selalu semakin baik.
+
+Untuk `event_log_pkey`, index dipertahankan karena merupakan primary key. Ukurannya sebesar **43 MB** dan `idx_scan` tercatat **1 kali**. Nilai `idx_scan` tersebut tidak dijadikan alasan penghapusan karena fungsi primary key berkaitan dengan integritas dan keunikan data.
+
+Untuk index tambahan, hasil Q27 menunjukkan bahwa penambahan lima index meningkatkan median waktu `INSERT` dari **694.427 ms menjadi 3848.288 ms**, atau meningkat **454.17%**. Angka ini menjadi bukti bahwa setiap index memiliki biaya pemeliharaan saat data ditulis.
+
+Selain itu, Q28 menunjukkan bahwa lima index menambah sekitar **32 MB** ruang penyimpanan dan meningkatkan total ukuran dari **46 MB menjadi 78 MB**, atau naik **70.35%**.
+
+Oleh karena itu, prinsip rekomendasi akhir adalah **mempertahankan index yang memiliki manfaat query yang terukur, mempertahankan index yang dibutuhkan oleh constraint, dan menghindari index tambahan yang manfaatnya tidak sebanding dengan biaya write dan storage**.
 
 
 Penggunaan AI dan Verifikasi

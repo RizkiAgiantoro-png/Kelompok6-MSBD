@@ -59,3 +59,87 @@ Ukuran sesudah UPDATE:
  hot_longgar    |     50000 |         12252
  hot_uji_indeks |     50000 |             0
 (2 rows)
+
+## Langkah 7 (Q27 sampai Q31)
+Q27: Harga Tulis Index
+
+Pengujian dilakukan dengan INSERT sebanyak 200.000 baris pada tabel tanpa index dan tabel dengan lima index. Setiap kondisi dijalankan tiga kali.
+
+Tanpa index
+Run 1 | 848.287 ms
+Run 2 | 607.452 ms
+Run 3 | 694.427 ms
+
+Tercepat | 607.452 ms
+Median   | 694.427 ms
+Dengan lima index
+Run 1 | 4568.800 ms
+Run 2 | 3848.288 ms
+Run 3 | 3791.625 ms
+
+Tercepat | 3791.625 ms
+Median   | 3848.288 ms
+
+Perbandingan median:
+
+Tanpa index       | 694.427 ms
+Dengan 5 index    | 3848.288 ms
+Kenaikan          | 454.17%
+Rasio waktu       | ~5.54x
+
+Buffer pada pengujian:
+
+Tanpa index
+shared hit | 211761
+dirtied    | 5885
+written    | 5887
+
+Dengan 5 index
+shared hit | 1925600
+read       | 4
+dirtied    | 10026
+written    | 10024
+Q28: Harga Penyimpanan Index
+kondisi            | table_size | index_size | total_size | table_bytes | index_bytes | total_bytes
+-------------------+------------+------------+------------+-------------+-------------+-------------
+Tanpa index        | 46 MB      | 0 bytes    | 46 MB      | 48242688    | 0           | 48242688
+Dengan lima index  | 46 MB      | 32 MB      | 78 MB      | 48242688    | 33939456    | 82182144
+
+Tambahan ukuran:
+
+tambahan_ukuran         | 32 MB
+persen_kenaikan_ukuran  | 70.35%
+Q29: Statistik Index pada lab6.event_log
+schemaname | table_name |   index_name   | idx_scan | idx_tup_read | idx_tup_fetch | index_bytes | index_size
+-----------+------------+----------------+----------+--------------+---------------+-------------+------------
+lab6       | event_log  | event_log_pkey |        1 |      2000000 |             0 |    44941312 | 43 MB
+
+Definisi index:
+
+CREATE UNIQUE INDEX event_log_pkey
+ON lab6.event_log USING btree (event_id)
+Q30: Data Pendukung Rekomendasi Index
+index_name    | idx_scan | idx_tup_read | idx_tup_fetch | index_bytes | index_size
+--------------+----------+--------------+---------------+-------------+-----------
+event_log_pkey | 1       | 2000000      | 0             | 44941312    | 43 MB
+
+Ukuran total event_log:
+
+table_size   | 458 MB
+indexes_size | 43 MB
+total_size   | 501 MB
+Q31: Dasar Keputusan Index
+event_log_pkey
+idx_scan  | 1
+size      | 43 MB
+status    | Dipertahankan karena merupakan primary key
+
+Lima index pada pengujian Q27
+median INSERT tanpa index | 694.427 ms
+median INSERT dengan 5 index | 3848.288 ms
+kenaikan waktu | 454.17%
+
+Tambahan storage
+tanpa index | 46 MB
+dengan 5 index | 78 MB
+kenaikan | 70.35%
