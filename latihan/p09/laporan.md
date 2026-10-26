@@ -20,3 +20,23 @@ Q11 Tabel Ringkasan Anomali
 2. Phantom read: Sesi A hitung baris, Sesi B insert+commit, Sesi A hitung lagi jumlahnya bertambah. Isolation level yang diamati adalah READ COMMITTED. Cara mencegahnya adalah menggunakan REPEATABLE READ.
 3. Dirty read: Sesi A update (tanpa commit), Sesi B baca data. Di PostgreSQL tidak bisa diamati karena dicegah otomatis secara internal, meskipun Sesi B menggunakan READ UNCOMMITTED.
 4. Lost update: Sesi A dan B baca data bersamaan, lalu update dengan nilai absolut secara berurutan menimpa satu sama lain. Isolation level yang diamati adalah READ COMMITTED. Cara mencegahnya adalah dengan melakukan update relatif (saldo = saldo - x) di level database, menggunakan SELECT FOR UPDATE, atau menaikkan level ke REPEATABLE READ/SERIALIZABLE.
+
+Langkah 3 (Q12 sampai Q17)
+
+Q12 Perbaikan Lost Update (Atomic Update)
+Menghitung berdasarkan nilai kolom di database (misal: saldo = saldo - 10000) jauh lebih aman daripada membaca nilai, menghitung di aplikasi, lalu menulis nilai absolut (misal: saldo = 900000). Atomic update memastikan bahwa database menggunakan nilai terakhir yang ada di disk tepat pada saat UPDATE dieksekusi, sehingga perubahan dari transaksi lain yang masuk sepersekian detik sebelumnya tidak tertimpa begitu saja.
+
+Q13 SELECT ... FOR UPDATE (Pessimistic Locking)
+Ketika Sesi A mengeksekusi SELECT ... FOR UPDATE, Sesi B yang menjalankan perintah serupa akan langsung berstatus *waiting* (menunggu). Sesi B baru akan melanjutkan proses pencarian dan pengunciannya segera setelah Sesi A mengeksekusi COMMIT atau ROLLBACK. Cara ini sangat efektif untuk skenario antrean di mana kita ingin memastikan hanya satu transaksi yang dapat memanipulasi baris tertentu pada satu waktu.
+
+Q14 Optimistic Locking dengan Kondisi Nilai
+Jika tidak ingin menggunakan FOR UPDATE yang menahan transaksi (blocking), kita bisa menambahkan kondisi nilai yang dibaca pada klausa WHERE (misalnya WHERE rekening_id = 2 AND saldo = 950000). Jika transaksi lain sudah mengubah saldo tersebut, kueri UPDATE ini akan mengembalikan "UPDATE 0". Aplikasi kemudian mengetahui bahwa data sudah berubah, lalu dapat melakukan pembatalan atau mengulangi proses (retry).
+
+Q15 MVCC (Multi-Version Concurrency Control)
+Secara konseptual, saat terjadi UPDATE, PostgreSQL tidak menimpa data asli di tempat. Alih-alih, ia membuat "versi baru" dari baris tersebut. Transaksi yang sedang berjalan (Sesi A) melihat versi baru ini. Transaksi lain (Sesi B) yang melakukan SELECT akan diarahkan untuk membaca "versi lama" yang masih valid untuk snapshot mereka. Inilah sebabnya pembaca (SELECT) tidak perlu menunggu penulis (UPDATE) selesai.
+
+Q16 Metadata xmin dan xmax
+Kolom xmin menyimpan ID transaksi yang menciptakan (INSERT/UPDATE) versi baris tersebut, sedangkan xmax menyimpan ID transaksi yang menghapus atau menimpa (UPDATE/DELETE) baris tersebut. Keduanya adalah metadata internal mesin PostgreSQL. Satu nilai saja tidak cukup untuk mendiagnosis visibilitas karena kita harus mencocokkannya dengan daftar transaksi yang sedang aktif (pg_stat_activity) untuk mengetahui apakah xmax tersebut berasal dari transaksi yang sudah di-commit atau masih menggantung.
+
+Q17 Manfaat MVCC dan Vacuum
+Manfaat utama MVCC adalah performa konkurensi yang sangat tinggi karena operasi baca dan tulis tidak saling mengunci. Namun, karena UPDATE membuat versi baris baru, versi baris lama (dead tuples) akan terus menumpuk di dalam disk (tabel bloat). Oleh karena itu, proses VACUUM sangat diperlukan untuk menyapu bersih versi-versi baris lama yang sudah tidak lagi terlihat oleh transaksi mana pun, agar ruang penyimpanannya bisa digunakan kembali.
