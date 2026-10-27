@@ -171,13 +171,13 @@ SELECT count(*) AS aktif FROM lab9.dokter_jaga WHERE aktif;
 -- 3. [SESI A]
 UPDATE lab9.dokter_jaga SET aktif = false WHERE dokter_id = 1;
 COMMIT;
--- 4. [SESI B]  -> ERROR 40001 could not serialize access (bisa muncul di UPDATE atau di COMMIT)
+-- 4. [SESI B]
 UPDATE lab9.dokter_jaga SET aktif = false WHERE dokter_id = 2;
-COMMIT;
-ROLLBACK;       -- jika B error, wajib ROLLBACK
--- 5. Cek: hanya 1 dokter nonaktif, aturan terjaga
+-- Jika UPDATE gagal dengan 40001, jalankan ROLLBACK di Sesi B dan jangan
+-- lanjutkan COMMIT. Jika UPDATE berhasil, jalankan COMMIT; bila COMMIT gagal,
+-- jalankan ROLLBACK. Catat tahap dan SQLSTATE yang benar-benar terjadi.
+-- 5. Setelah transaksi kedua selesai/di-ROLLBACK, jalankan di sesi bersih:
 SELECT * FROM lab9.dokter_jaga ORDER BY dokter_id;
--- Catatan: error 40001 bisa muncul di sesi A atau B tergantung urutan. Catat apa adanya.
 
 -- =====================================================================
 -- Q28 - Lihat SIReadLock

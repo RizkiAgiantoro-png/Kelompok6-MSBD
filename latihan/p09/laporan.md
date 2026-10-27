@@ -1,3 +1,64 @@
+Latihan P09 - Menguji Transaksi dan Kendali Konkurensi
+
+Metadata eksperimen
+- Database server: PostgreSQL 17 dari image Docker `postgres:17`.
+- Client: `psql 17.11`; dua terminal PowerShell sebagai Sesi A dan Sesi B.
+- Database dan role: `latihan` dan `msbd`; eksperimen dibatasi ke skema `lab9`.
+- Konfigurasi yang dicatat: `deadlock_timeout = 1s`, `lock_timeout = 0`,
+  `statement_timeout = 0`, `idle_in_transaction_session_timeout = 0`.
+  Timeout uji Q23 memakai `SET LOCAL lock_timeout = '2s'` di dalam transaksi;
+  tidak ada timeout global yang diubah.
+- Penggunaan AI: AI membantu menyusun dan merapikan skrip/laporan serta
+  menginterpretasikan urutan eksperimen. Perintah dijalankan oleh anggota
+  kelompok; hasil yang dicatat berasal dari output psql dan bukti kelompok.
+
+Langkah 1 (Q1 sampai Q5)
+
+Catatan: hasil Q1-Q5 di bawah sudah dijalankan setelah q00_setup.sql. Simpan
+transkrip sesi sebagai bukti pengumpulan.
+
+Q1 Kondisi awal dan total saldo
+Setelah q00_setup.sql dijalankan pada PostgreSQL dalam container Docker, hasil
+menunjukkan rekening 1 (Ani) dan rekening 2 (Budi), masing-masing bersaldo
+1000000.00. Query COUNT dan SUM menghasilkan 2 rekening dan total saldo
+2000000.00.
+
+Q2 Perubahan sebelum COMMIT
+Sesi A menjalankan BEGIN dan mengurangi saldo rekening 1 sebesar 100000.
+SELECT di Sesi A menampilkan 900000.00. Saat transaksi A masih terbuka, SELECT
+di Sesi B menampilkan 1000000.00 (nilai sebelum perubahan), sehingga perubahan
+belum di-COMMIT tidak terlihat oleh sesi lain. Setelah A menjalankan COMMIT,
+SELECT berikutnya di Sesi B menampilkan 900000.00. PostgreSQL yang dipakai
+melaporkan versi psql 17.11.
+
+Q3 Perbandingan COMMIT dan ROLLBACK
+Setelah Q2, Sesi A mengurangi saldo rekening 1 sebesar 50000. SELECT di dalam
+transaksi menampilkan 850000.00. Setelah ROLLBACK, SELECT berikutnya menampilkan
+900000.00. Perubahan Q2 bertahan karena di-COMMIT; perubahan Q3 tidak bertahan
+karena di-ROLLBACK.
+
+Q4 SAVEPOINT
+Sesi A mengurangi saldo rekening 1 sebesar 10000, membuat SAVEPOINT, lalu
+mengurangi saldo rekening 2 sebesar 20000. Sebelum ROLLBACK TO SAVEPOINT, SELECT
+menampilkan saldo rekening 1 sebesar 890000.00 dan rekening 2 sebesar 980000.00.
+Setelah rollback ke savepoint, SELECT menampilkan rekening 1 sebesar 890000.00
+dan rekening 2 sebesar 1000000.00. Dengan demikian, perubahan sebelum savepoint
+tetap ada, sedangkan perubahan sesudahnya dibatalkan. Transaksi kemudian di-
+COMMIT; perubahan rekening 1 sebesar 10000 tersimpan.
+
+Q5 Atomicity dan consistency
+Atomicity terlihat dari COMMIT yang mempertahankan perubahan transaksi dan
+ROLLBACK yang membatalkannya. Pada Q3, perubahan saldo dari 900000.00 menjadi
+850000.00 dibatalkan dan nilai kembali ke 900000.00. SAVEPOINT memungkinkan
+pembatalan sebagian transaksi tanpa membatalkan perubahan sebelumnya. Consistency
+dibantu constraint CHECK (saldo >= 0): percobaan mengubah saldo rekening 2
+menjadi -1 ditolak dengan SQLSTATE 23514 (check_violation), constraint
+rekening_saldo_check pada skema lab9, tabel rekening. Setelah ROLLBACK TO
+SAVEPOINT, SELECT menunjukkan saldo rekening 2 tetap 1000000.00 dan transaksi
+berhasil di-COMMIT. Satu COMMIT tambahan setelah transaksi ditutup menghasilkan
+warning SQLSTATE 25P01 (there is no transaction in progress); warning tersebut
+berasal dari COMMIT berulang dan tidak mengubah data.
+
 Langkah 2 (Q6 sampai Q11)
 
 Q6 Non-repeatable read
@@ -53,7 +114,7 @@ Q19 FOR UPDATE pada baris yang sama
 Sesi A BEGIN lalu SELECT rekening 1 FOR UPDATE: langsung berhasil. Sesi B menjalankan perintah yang sama dan menggantung (menunggu), tidak ada hasil dan tidak ada error. Setelah Sesi A COMMIT, Sesi B langsung mendapat hasil dan memegang kunci. Artinya satu baris hanya bisa dikunci satu transaksi dalam satu waktu.
 
 Q20 Deadlock
-Sesi A mengunci rekening 1, Sesi B mengunci rekening 2. Sesi A minta rekening 2 (menunggu B), Sesi B minta rekening 1 (menunggu A): saling menunggu, tidak ada yang bisa maju. Setelah deadlock_timeout (1 detik) PostgreSQL mendeteksi siklus ini dan membatalkan salah satu transaksi dengan ERROR: deadlock detected, SQLSTATE 40P01. Transaksi yang lain lalu bisa lanjut. [ISI: sesi mana yang kena error pada percobaan kami:B. Sesi yang error wajib ROLLBACK.
+Sesi A mengunci rekening 1, Sesi B mengunci rekening 2. Sesi A minta rekening 2 (menunggu B), Sesi B minta rekening 1 (menunggu A): saling menunggu, tidak ada yang bisa maju. Setelah deadlock_timeout (1 detik) PostgreSQL mendeteksi siklus ini dan membatalkan Sesi B dengan ERROR: deadlock detected, SQLSTATE 40P01. Sesi B di-ROLLBACK; Sesi A lalu memperoleh lock rekening 2 dan kedua sesi di-ROLLBACK setelah percobaan.
 
 Q21 Urutan penguncian konsisten
 Jika semua sesi mengunci dari rekening_id terkecil ke terbesar (1 lalu 2), Sesi B akan menunggu di rekening 1 dan tidak memegang rekening 2 saat menunggu. Tidak ada siklus tunggu, jadi tidak terjadi deadlock; B hanya menunggu sebentar lalu lanjut setelah A COMMIT. Deadlock dapat dihindari pada skenario ini.
@@ -79,7 +140,7 @@ Q26 Write skew (REPEATABLE READ)
 Aturan: minimal satu dokter aktif. Sesi A dan B sama-sama membaca jumlah dokter aktif = 2. A menonaktifkan dokter 1 lalu COMMIT, B menonaktifkan dokter 2 lalu COMMIT. Keduanya berhasil karena mengubah baris berbeda (tidak ada konflik tulis) dan masing-masing membaca snapshot lama. Hasil akhir: 0 dokter aktif, aturan bisnis dilanggar. Inilah write skew; REPEATABLE READ tidak mencegahnya.
 
 Q27 SERIALIZABLE
-Skenario sama dengan SERIALIZABLE: kedua sesi membaca count = 2 sebelum ada yang COMMIT. Salah satu transaksi dibatalkan dengan ERROR: could not serialize access due to read/write dependencies among transactions, SQLSTATE 40001, HINT: The transaction might succeed if retried. [ISI: sesi/ pernyataan mana yang kena error: ___ ]. Hasil akhir hanya satu dokter nonaktif, aturan terjaga. Transaksi yang gagal harus di-ROLLBACK lalu diulang dari awal.
+Skenario sama dengan SERIALIZABLE: kedua sesi membaca count = 2 sebelum ada yang COMMIT. Sesi B dibatalkan saat menjalankan UPDATE dengan ERROR: could not serialize access due to read/write dependencies among transactions, SQLSTATE 40001, HINT: The transaction might succeed if retried. Sesi B di-ROLLBACK. Hasil akhir hanya satu dokter nonaktif, aturan terjaga. Transaksi yang gagal harus diulang dari awal.
 
 Q28 SIReadLock
 SIReadLock adalah predicate lock yang dicatat PostgreSQL pada transaksi SERIALIZABLE untuk melacak apa yang dibaca (tabel/halaman/baris). Ia bukan lock yang memblokir; transaksi lain tidak menunggu karenanya. Gunanya agar PostgreSQL bisa mendeteksi ketergantungan baca-tulis antar transaksi yang membentuk pola berbahaya (pivot), lalu membatalkan salah satu bila hasilnya tidak setara dengan eksekusi serial. Karena itu SERIALIZABLE tidak sama dengan FOR UPDATE: FOR UPDATE benar-benar memblokir, sedangkan SERIALIZABLE hanya mencatat dan mendeteksi (optimistic), sehingga konkurensi tetap tinggi tetapi ada kemungkinan gagal 40001. Bukti: query pg_locks WHERE mode='SIReadLock' menampilkan lock pada tabel dokter_jaga.
@@ -105,3 +166,54 @@ for attempt in 1..MAX_RETRY:
         raise
 ```
 Seluruh transaksi diulang dari BEGIN (bukan hanya pernyataan yang gagal) karena snapshot dan keputusan sebelumnya sudah tidak valid. Jitter mencegah beberapa sesi mengulang bersamaan dan bentrok lagi. Email/notifikasi dikirim setelah COMMIT karena jika dikirim di dalam transaksi lalu transaksi di-rollback atau di-retry, email sudah terkirim padahal data tidak tersimpan, atau terkirim berkali-kali. ROLLBACK database bisa dibatalkan, email tidak.
+
+Langkah 6 (Q30 sampai Q32)
+
+Q30 Matriks enam anomali
+
+| Anomali | Cara reproduksi / urutan transaksi | Level dan hasil yang diamati | Mitigasi |
+|---|---|---|---|
+| Dirty read | A mengubah saldo tanpa COMMIT; B membaca saldo saat perubahan A belum di-COMMIT. | A mencoba `READ UNCOMMITTED`; PostgreSQL menampilkan nilai lama, bukan nilai A yang belum di-COMMIT. Tidak terjadi dirty read. | Pertahankan transaksi; PostgreSQL tidak menyediakan dirty read bahkan saat diminta `READ UNCOMMITTED`. |
+| Non-repeatable read | A membaca saldo rekening 1; B mengubah saldo dan COMMIT; A membaca baris yang sama lagi. | `READ COMMITTED`: nilai berubah dari 1000000 menjadi 900000 pada Q6. `REPEATABLE READ`: Q7 tetap membaca snapshot awal 1000000. | Gunakan `REPEATABLE READ` bila pembacaan berulang harus konsisten dalam satu transaksi. |
+| Phantom read | A menghitung baris yang memenuhi kondisi; B menambahkan baris yang memenuhi kondisi dan COMMIT; A menghitung lagi. | `READ COMMITTED`: jumlah meningkat dari 1 menjadi 2. `REPEATABLE READ`: jumlah tetap pada snapshot awal. | Gunakan `REPEATABLE READ` atau `SERIALIZABLE` sesuai kebutuhan; PostgreSQL menjaga snapshot tetap pada `REPEATABLE READ`. |
+| Lost update | A dan B membaca saldo yang sama lalu menghitung nilai absolut masing-masing; A menulis 900000 dan B menulis 950000 setelah menunggu lock A. | Pada skenario `READ COMMITTED` Q10, nilai akhir 950000; pembaruan A tertimpa. | Gunakan pembaruan atomik berbasis kolom (`saldo = saldo - nilai`), `SELECT ... FOR UPDATE`, atau optimistic locking dengan kondisi versi/nilai lama. |
+| Write skew | Dua transaksi membaca jumlah dokter aktif = 2 pada snapshot yang sama; masing-masing menonaktifkan dokter berbeda dan COMMIT. | `REPEATABLE READ` Q26: kedua COMMIT berhasil dan jumlah aktif menjadi 0. `SERIALIZABLE` Q27: salah satu transaksi gagal dengan `40001`, hanya satu dokter dinonaktifkan. | Gunakan `SERIALIZABLE` dan retry seluruh transaksi saat `40001`; alternatifnya kunci baris/representasi aturan bersama atau tegakkan invariant dengan desain constraint yang sesuai. |
+| Pembacaan tidak konsisten (read skew) | Pembaca memulai transaksi `READ COMMITTED`, membaca rekening 2, lalu transaksi transfer rekening 1→2 dijalankan dan di-COMMIT sebelum pembaca membaca rekening 1. | Teramati: rekening 2 terbaca 1000000.00 sebelum transfer dan rekening 1 terbaca 900000.00 sesudah transfer. Nilai campuran berjumlah 1900000.00, sedangkan transfer mengubah saldo -100000 dan +100000 sehingga total database tetap 2000000.00. | Baca semua baris dalam satu pernyataan snapshot, atau gunakan `REPEATABLE READ`/`SERIALIZABLE` untuk transaksi laporan yang perlu snapshot konsisten. |
+
+Q30 membedakan non-repeatable read (baris yang sama berubah saat dibaca ulang),
+phantom read (baris baru memenuhi predikat), dan read skew (pembacaan beberapa
+data terkait mencampur snapshot berbeda). Pada uji read skew, pastikan COMMIT
+transfer terjadi di antara dua SELECT pembaca. Setelah pembacaan kedua, Sesi
+pembaca di-ROLLBACK dan data dipulihkan; SELECT akhir menunjukkan saldo kedua
+rekening 1000000.00 dan SUM(saldo) 2000000.00.
+
+Q31 Rekomendasi isolation level
+1. Pembacaan sederhana yang boleh melihat perubahan antarpernyataan: `READ
+COMMITTED`, level default PostgreSQL. Setiap pernyataan memperoleh snapshot baru,
+sehingga hasil SELECT berulang bisa berbeda seperti Q6.
+2. Laporan yang membutuhkan snapshot konsisten untuk beberapa pernyataan:
+`REPEATABLE READ`. Semua pembacaan transaksi menggunakan snapshot yang stabil,
+seperti hasil Q7 dan Q8. Konsekuensinya, laporan tidak melihat perubahan yang
+di-COMMIT setelah snapshot terbentuk.
+3. Aturan bisnis lintas beberapa baris: `SERIALIZABLE` bila operasi harus
+berperilaku setara dengan urutan serial. Q26 menunjukkan bahwa `REPEATABLE READ`
+masih memungkinkan write skew; Q27 menunjukkan `SERIALIZABLE` mencegah hasil itu
+dengan membatalkan salah satu transaksi. Aplikasi harus siap mengulang seluruh
+transaksi untuk SQLSTATE `40001`. Konflik lock masih dapat menghasilkan `40P01`,
+yang juga perlu ditangani dengan retry terbatas. Untuk aturan tertentu, row lock
+yang dirancang konsisten atau constraint yang tepat dapat menjadi alternatif,
+tetapi perlu memastikan seluruh jalur penulisan mematuhi aturan tersebut.
+
+Q32 Tiga pelajaran utama
+1. COMMIT menentukan kapan perubahan menjadi terlihat oleh transaksi lain.
+Pada Q2, Sesi A melihat 900000 sebelum COMMIT, sedangkan Sesi B tetap membaca
+1000000; setelah COMMIT, pembacaan B menjadi 900000.
+2. Snapshot konsisten tidak sama dengan perlindungan penuh terhadap aturan
+lintas baris. Pada Q26 kedua transaksi REPEATABLE READ membaca dua dokter aktif
+dan berhasil menonaktifkan baris berbeda, sehingga hasil akhirnya nol dokter
+aktif. Pada Q27 SERIALIZABLE membatalkan Sesi B dengan SQLSTATE 40001 dan hanya
+satu dokter menjadi nonaktif.
+3. Locking memengaruhi progres transaksi dan urutan lock penting. Q19
+memperlihatkan sesi kedua menunggu sampai pemegang lock selesai; Q20 menghasilkan
+deadlock SQLSTATE 40P01 karena sesi saling menunggu; Q21 tidak deadlock ketika
+keduanya mengambil lock dengan urutan rekening yang sama.

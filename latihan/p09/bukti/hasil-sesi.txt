@@ -1,0 +1,126 @@
+Transkrip ringkas sesi P09
+Tanggal: 2026-10-27
+Client: psql 17.11 (PostgreSQL 17 melalui Docker Compose)
+Koneksi: database latihan, user msbd
+Catatan: output diringkas dari transkrip yang dikirim saat eksperimen; bukan
+salinan penuh terminal. Sesi A/B mengikuti urutan instruksi latihan.
+
+Q1 - Setup dan saldo awal
+CREATE SCHEMA
+CREATE TABLE
+INSERT 0 2
+ rekening_id | pemilik |   saldo
+-------------+---------+------------
+           1 | Ani     | 1000000.00
+           2 | Budi    | 1000000.00
+(2 rows)
+
+ jumlah_rekening | total_saldo
+-----------------+-------------
+               2 |  2000000.00
+(1 row)
+
+Q2 - Perubahan belum commit
+Sesi A:
+BEGIN
+UPDATE 1
+ rekening_id |   saldo
+-------------+-----------
+           1 | 900000.00
+(1 row)
+
+Sesi B saat A belum commit:
+ rekening_id |   saldo
+-------------+------------
+           1 | 1000000.00
+(1 row)
+
+Sesi A:
+COMMIT
+
+Sesi B setelah A commit:
+ rekening_id |   saldo
+-------------+-----------
+           1 | 900000.00
+(1 row)
+
+Q3 - Rollback
+BEGIN
+UPDATE 1
+ rekening_id |   saldo
+-------------+-----------
+           1 | 850000.00
+(1 row)
+ROLLBACK
+ rekening_id |   saldo
+-------------+-----------
+           1 | 900000.00
+(1 row)
+
+Q4 - Savepoint
+Sebelum ROLLBACK TO SAVEPOINT:
+ rekening_id |   saldo
+-------------+-----------
+           1 | 890000.00
+           2 | 980000.00
+(2 rows)
+
+Sesudah ROLLBACK TO SAVEPOINT:
+ rekening_id |   saldo
+-------------+------------
+           1 |  890000.00
+           2 | 1000000.00
+(2 rows)
+Transaksi kemudian di-COMMIT.
+
+Q5 - Constraint CHECK
+Dengan VERBOSITY verbose:
+ERROR:  23514: new row for relation "rekening" violates check constraint
+        "rekening_saldo_check"
+DETAIL: Failing row contains (2, Budi, -1.00).
+SCHEMA NAME: lab9
+TABLE NAME: rekening
+CONSTRAINT NAME: rekening_saldo_check
+
+Sesudah ROLLBACK TO SAVEPOINT:
+ rekening_id |   saldo
+-------------+------------
+           2 | 1000000.00
+(1 row)
+COMMIT
+
+COMMIT tambahan setelah transaksi ditutup menghasilkan warning:
+WARNING:  25P01: there is no transaction in progress
+Warning ini berasal dari perintah COMMIT berulang dan tidak mengubah data.
+
+Q30 - Read skew (READ COMMITTED)
+Sesi pembaca membuka transaksi dan membaca rekening 2 sebelum transfer:
+ rekening_id |   saldo
+-------------+------------
+           2 | 1000000.00
+(1 row)
+
+Sesi transfer:
+BEGIN
+UPDATE 1
+UPDATE 1
+COMMIT
+
+Sesi pembaca membaca rekening 1 setelah transfer commit:
+ rekening_id |   saldo
+-------------+-----------
+           1 | 900000.00
+(1 row)
+Pembaca kemudian ROLLBACK.
+
+Cleanup:
+UPDATE 2
+ rekening_id | pemilik |   saldo
+-------------+---------+------------
+           1 | Ani     | 1000000.00
+           2 | Budi    | 1000000.00
+(2 rows)
+ total_saldo
+-------------
+  2000000.00
+(1 row)
