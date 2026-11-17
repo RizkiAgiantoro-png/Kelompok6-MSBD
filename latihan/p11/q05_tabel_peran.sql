@@ -1,0 +1,14 @@
+-- Diminta: menyusun tabel berisi tujuh peran pada lab11, hak aksesnya, dan status login.
+-- Dipilih: menyusun dokumentasi peran dalam bentuk pernyataan SQL / komentar terstruktur.
+-- Alternatif: menyembunyikan matriks peran; tidak dipilih karena wajib ada di laporan.
+
+-- Matriks 7 Peran lab11:
+-- 1. skema_owner : Pemilik skema dan objek, hak penuh (Bisa login: Ya/Tidak tergantung konfigurasi, umumnya Ya sebagai admin).
+-- 2. app_read     : Membaca data dasar (SELECT) (Bisa login: Ya).
+-- 3. app_write    : Membaca dan menulis data (SELECT, INSERT, UPDATE, DELETE) (Bisa login: Ya).
+-- 4. app_portal   : Akses aplikasi portal (Bisa login: Ya).
+-- 5. app_laporan  : Akses laporan (SELECT terbatas) (Bisa login: Ya).
+-- 6. app_analitik : Akses analisis data tersamar (Bisa login: Ya).
+-- 7. admin_audit  : Akses pencatatan dan jejak audit (Bisa login: Ya).
+--
+-- Penjelasan singkat: Aplikasi tidak pernah login sebagai pemilik (skema_owner) untuk menerapkan prinsip hak istimewa minimum (Least Privilege), menghindari potensi eksploitasi jika akun aplikasi berhasil dibobol penyerang.
