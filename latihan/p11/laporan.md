@@ -129,7 +129,57 @@ Sebagai `app_laporan`, `INSERT` berparameter menyimpan `O'Neil` secara utuh di t
 
 Perubahan dijalankan sebagai `postgres`. Login baru sebagai `app_portal` menunjukkan `statement_timeout = 5s`. Uji timeout dengan pernyataan tunggal pada kontainer sintetis menghasilkan `ERROR: 57014: canceling statement due to statement timeout`. Log server memuat pesan pembatalan dan entri `STATEMENT` untuk kueri yang dibatalkan. Jika pemanggilan `pg_sleep` membuat kueri melewati batas, pengulangan akan menambah entri galat. Cocokkan kode `57014` dengan pesan timeout karena pembatalan lain juga dapat memakai kode itu. [Dokumentasi batas waktu](https://www.postgresql.org/docs/17/runtime-config-client.html) · [Dokumentasi log](https://www.postgresql.org/docs/17/runtime-config-logging.html) · [Daftar SQLSTATE](https://www.postgresql.org/docs/17/errcodes-appendix.html)
 
-*(Q19–Q30 dilanjutkan oleh anggota kelompok lain.)*
+### Langkah 5: Enkripsi, Hashing, dan Penyamaran
+
+**Status pengujian:** Skrip Q19–Q24 sudah disiapkan, tetapi belum dijalankan pada data resmi `lab11`. Bagian berikut menjelaskan cara kerja dan bukti yang harus dicatat. Hasil yang diharapkan bukan hasil pengujian.
+
+**Q19: Hash dan enkripsi**
+
+Kata sandi akun diolah dengan `crypt(..., gen_salt('bf', 8))` dan disimpan pada kolom `sandi_hash`. Nama kolom sandi sumber perlu diperiksa dari struktur `lab11.akun` sebelum menjalankan skrip. Dua hash dari sandi yang sama dibandingkan, kemudian diuji dengan sandi benar dan salah. Garam acak membuat sandi yang sama menghasilkan hash berbeda sehingga tabel hash siap pakai tidak langsung dapat digunakan untuk semua akun. Bcrypt tetap bisa diserang dengan tebakan, tetapi tiap tebakan membutuhkan biaya komputasi.
+
+Kolom sandi awal dipertahankan untuk kebutuhan percobaan. Karena itu, tahap ini belum dapat dianggap sebagai penyimpanan sandi yang aman untuk produksi.
+
+**Bukti belum diisi:** peran, jumlah akun terhash, dua hash, `hash_berbeda`, `sandi_benar`, dan `sandi_salah`.
+
+**Q20: Biaya kerja hashing**
+
+Setiap metode dijalankan 100 kali dengan kata sandi yang sama. Pengukuran memakai `clock_timestamp()` agar waktu yang diambil benar-benar bergerak selama transaksi. Untuk bcrypt, yang diukur adalah `crypt` bersama `gen_salt`, sebab `gen_salt` saja belum melakukan hashing kata sandi. Cost 10 diharapkan lebih lambat daripada cost 6. Sifat lambat ini membantu mempermahal tebakan massal, sedangkan MD5 dirancang cepat dan tidak sesuai untuk penyimpanan kata sandi. Waktu pengujian juga mencakup overhead loop.
+
+**Bukti belum diisi:** tabel waktu total dan rata-rata ketiga metode dari mesin pengujian.
+
+**Q21: Enkripsi rekening**
+
+Sebanyak 1000 rekening dengan `id <= 1000` dienkripsi memakai `pgp_sym_encrypt`. Kunci contoh disetel pada sesi, lalu dihapus dari pengaturan sesi setelah selesai. Skrip memeriksa jumlah data, membuka kembali satu ciphertext, dan membandingkan hasilnya dengan rekening awal. Dua enkripsi atas nilai dan kunci yang sama juga dibandingkan; hasilnya diharapkan berbeda karena proses PGP menggunakan keacakan.
+
+Kolom `rekening` asli masih ada sesuai bentuk percobaan. Jadi dump tabel ini masih memuat rekening dalam teks terang meskipun kolom `rekening_enc` sudah dibuat.
+
+**Bukti belum diisi:** jumlah rekening terenkripsi, satu hasil dekripsi, `cocok`, dan `ciphertext_sama`.
+
+**Q22: Tempat kunci bisa terlihat**
+
+Sesi A menyetel kunci contoh, lalu menjalankan enkripsi. Sesi B sebagai `postgres` mengamati `pg_stat_activity`. Pengamatan dilakukan dua kali: setelah `SET` ketika sesi A menunggu, dan ketika query enkripsi sedang aktif. Literal kunci dapat muncul pada teks perintah `SET`. Pada query yang merujuk `current_setting`, teks query tidak otomatis menampilkan nilai variabel atau rekening yang dibaca dari tabel. Kesimpulan akhir harus mengikuti keluaran pengamatan, bukan hanya dugaan dari kode.
+
+Dua tempat lain yang perlu diperiksa adalah log PostgreSQL dan riwayat perintah klien atau skrip aplikasi. Kunci contoh dalam skrip ini hanya untuk lab, bukan pola penyimpanan kunci produksi.
+
+**Bukti belum diisi:** `usename`, `state`, dan `query` dari kedua pengamatan sesi B.
+
+**Q23: Tampilan tersamar**
+
+View menyamarkan nama, NIK, surel, tanggal lahir, dan saldo. `app_analitik` diberi hak baca view, sementara hak baca langsung tabel dicabut. Hak `pg_read_all_data` dan atribut `BYPASSRLS` dari percobaan sebelumnya juga dibersihkan. Skrip memeriksa hak turunan supaya pencabutan langsung tidak memberi kesan aman yang keliru.
+
+View lab dibuat dengan pemilik `postgres`, tanpa `security_invoker`, agar dapat membaca data meskipun `skema_owner` sudah terkena FORCE RLS tanpa policy untuknya. Pilihan ini memungkinkan analis melihat data tersamar lintas penyewa; view ini tidak dimaksudkan sebagai isolasi per penyewa. Pengujian dilakukan setelah `SET ROLE app_analitik`: view harus bisa dibaca, sedangkan tabel asli harus menghasilkan galat izin, bukan hanya hasil kosong.
+
+**Bukti belum diisi:** peran aktif, lima baris view, jumlah baris view, dan galat akses langsung beserta SQLSTATE.
+
+**Q24: Identifikasi ulang**
+
+Kombinasi unik dihitung sebagai kelompok `(kota, lahir)` yang berisi tepat satu orang. Perhitungan diulang setelah tanggal lahir diganti tahun. Persentase penurunan dihitung dengan `(unik_sebelum - unik_sesudah) / unik_sebelum × 100%`. Jika tidak ada kombinasi unik sejak awal, persentase ditampilkan sebagai NULL.
+
+Untuk percobaan agregat, skrip memilih satu tanggal lahir yang hanya dimiliki satu pelanggan di suatu kota. Query pertama menghitung jumlah orang dan total saldo seluruh kota; query kedua menghitung kota yang sama tanpa tanggal tersebut. Jika selisih jumlah orang adalah satu, selisih total saldo mengungkap saldo orang itu. Generalisasi mengurangi keunikan, tetapi akses agregat yang saling bertumpang tindih masih dapat membocorkan informasi.
+
+**Bukti belum diisi:** jumlah unik sebelum/sesudah, persentase penurunan, target yang ditemukan, dua hasil agregat, dan selisihnya. Bila target tidak ditemukan, catat bahwa contoh tersebut belum dapat dibuktikan pada data yang tersedia.
+
+*(Q25–Q30 dilanjutkan oleh anggota berikutnya.)*
 
 ## Refleksi A–E
 
@@ -151,7 +201,11 @@ Mencabut hak (*revoke privilege*) bukan jalan keluar untuk keluhan keamanan anta
 
 Parameterisasi menghapus penyebab injeksi pada nilai dengan memisahkan templat dari data. Daftar putih mengendalikan bagian sintaks yang memang perlu dipilih, seperti nama kolom dan arah urut. Hak minimum dan RLS membatasi dampak di basis data. Pada Q14 `app_laporan` hanya punya `SELECT` dan tidak melihat baris di luar penyewa aktif. Batas waktu membatasi durasi pernyataan dan memberi sinyal di log, seperti pembatalan `57014` pada Q18.
 
-*(Refleksi D dan E diisi oleh anggota lain.)*
+**Reflektif D (Langkah 5)**
+
+Enkripsi kolom saja belum cukup. Pertama, pihak yang mempunyai kunci dan hak akses masih dapat membaca data; dekripsi pada Q21 serta pengamatan kunci pada Q22 menjadi pengujiannya. Kedua, informasi seseorang masih dapat disimpulkan dari data yang terlihat atau selisih agregat, seperti percobaan Q23–Q24. Risiko operasionalnya adalah kehilangan kunci: ciphertext tidak bisa dipulihkan tanpa kunci yang benar. Karena itu, akses dan cadangan kunci juga perlu dikelola. Bukti hasil untuk mendukung jawaban ini belum tersedia sampai Q21–Q24 dijalankan.
+
+*(Refleksi E diisi oleh anggota berikutnya.)*
 
 ## Peta Tiket #1134 ke UU PDP
 | Keluhan | Pasal relevan | Kontrol teknis pencegah | Bukti |
@@ -166,3 +220,9 @@ Seluruh percobaan serangan hanya dijalankan pada kontainer lab11 milik sendiri d
 3. Mochamad Rizki Agiantoro........................
 4. .................................................
 5. .................................................
+
+## Penggunaan AI dan Verifikasi
+
+Pada bagian Q19–Q24, AI digunakan untuk membantu menyusun SQL, petunjuk menjalankan percobaan, dan draf penjelasan. Pengujian pada data resmi belum dilakukan. Keluaran dan kesimpulan pengujian perlu diperiksa anggota sebelum laporan dikumpulkan.
+
+Rujukan teknis bagian ini: [pgcrypto PostgreSQL 17](https://www.postgresql.org/docs/17/pgcrypto.html), [CREATE VIEW](https://www.postgresql.org/docs/17/sql-createview.html), dan [pg_stat_activity](https://www.postgresql.org/docs/17/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW).
