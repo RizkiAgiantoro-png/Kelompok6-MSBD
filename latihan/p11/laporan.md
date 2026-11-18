@@ -86,7 +86,50 @@
    - *Penyebab:* Tabel anak (seperti `transaksi`) atau View tidak dipasangi RLS sehingga data penyewa lain dapat diintip lewat relasi atau fungsi bocor (*leaky functions*).
    - *Perbaikan:* Wajib aktifkan RLS pada seluruh tabel relasi yang memuat referensi tenant serta pasang opsi `WITH (security_barrier = true)` pada seluruh View.
 
-*(Q12 - Q30 akan dilanjutkan oleh anggota kelompok lain)*
+### Langkah 4 — Menutup celah injeksi SQL
+
+Kontrol defensif Q12–Q18 diuji pada PostgreSQL 17 di kontainer sementara tanpa jaringan. Tabel sintetis memiliki tiga pelanggan penyewa 1 dan dua pelanggan penyewa 2. Angka dari data resmi modul dan hasil Python yang terhubung ke `lab11-web` masih perlu diisi setelah aset lab tersedia. Bukti Q13–Q15 dan Q17 mencakup kontrol defensif. Jumlah hasil eksekusi injeksi dan keluaran fungsi laporan rentan belum tersedia.
+
+**Q12 · Perilaku normal**
+
+```text
+Templat SQL: SELECT id, nama, kota FROM lab11.pelanggan WHERE nama ILIKE %s
+Parameter ILIKE: '%Pelanggan 12%'
+```
+
+`Pelanggan 12` berasal dari pengguna. Python menambahkan kedua tanda `%` sebagai bagian dari nilai pola. Kueri pembanding Q12 menghasilkan `jumlah_pembanding = 1` saat login sebagai `app_laporan` pada data sintetis. Modul mengharapkan `365` pada data resmi, sehingga angka itu masih perlu diverifikasi.
+
+**Q13 · Penyebab perubahan hasil**
+
+Dalam SQL yang dirangkai dari input, sisa pola bawaan ikut dievaluasi selama masih berada di luar komentar. `=` memperlakukan `%` sebagai karakter biasa dan pembanding dapat bernilai salah. Komentar SQL membuat sisa baris diabaikan. Jika predikat yang tersisa selalu benar, filter pencarian berhenti membatasi baris yang dapat dilihat peran. Kontrol SQL dengan ekspresi tetap memberi hasil `f` untuk `'a' = 'a%'` dan `t` untuk `'a' ILIKE 'a%'`.
+
+**Q14 · Batas hak dan RLS**
+
+Pada login `app_laporan`, hasil uji menunjukkan `memakai_hak_baca = t`, `anggota_app_write = f`, `boleh_select = t`, `boleh_insert = f`, `boleh_update = f`, `boleh_delete = f`, dan `rls_berlaku = t`. Hitungan tanpa filter pencarian memberikan `semua_baris_terlihat = 3`, `baris_penyewa_1 = 3`, dan `baris_penyewa_lain = 0`. Hak minimum membatasi operasi pada tabel. RLS membatasi baris yang masih bisa dibaca saat filter aplikasi hilang. Angka pembanding untuk data modul mengikuti Q8 setelah kebijakan aktif, yakni 10.000 baris dalam penyewa 1 dan 0 di luar penyewa 1.
+
+**Q15 · Kueri berparameter**
+
+`cari_aman` mengirim templat SQL ke Psycopg dengan placeholder `%s` dan memberikan pola nama melalui argumen parameter. Kontrol PostgreSQL `PREPARE` dengan `$1` mengembalikan `jumlah = 1` untuk `Pelanggan 12` dan `jumlah = 1` untuk `O'Neil` sebagai `app_laporan`. Uji pemanggilan Python memeriksa bahwa apostrof sampai utuh di argumen parameter. Filter karakter berisiko merusak nama yang sah. Parameterisasi menjaga struktur SQL sekaligus mempertahankan nilai masukan. Tanda `%` dan `_` tetap memiliki arti pola sesuai aturan `ILIKE`. [Dokumentasi parameter Psycopg](https://www.psycopg.org/psycopg3/docs/basic/params.html)
+
+**Q16 · Daftar putih pengurutan**
+
+Placeholder menangani nilai. Nama kolom membutuhkan pengenal SQL dan arah urut membutuhkan kata kunci. Kode memilih keduanya dari pemetaan tertutup, lalu menggunakan `sql.Identifier` untuk nama kolom. Uji Python menghasilkan:
+
+```text
+kota/turun  → Diterima: kota DESC (kode keluar 0)
+saldo/turun → Ditolak: parameter pengurutan tidak dikenal (kode keluar 2)
+kota/acak   → Ditolak: parameter pengurutan tidak dikenal (kode keluar 2)
+```
+
+**Q17 · Status tersimpan dan pemakaian kedua**
+
+Sebagai `app_laporan`, `INSERT` berparameter menyimpan `O'Neil` secara utuh di tabel sementara. `laporan_kota_aman(1)` mengembalikan `Medan | 1`, sedangkan ID status yang tidak ada mengembalikan `0 rows`. Transaksi diakhiri dengan `ROLLBACK`. Validasi di jalur masuk hanya melindungi operasi penyimpanan. Risiko muncul kembali jika program memakai nilai yang tersimpan sebagai bagian dari sintaks perintah berikutnya. Fungsi laporan menggunakan SQL tetap dan membandingkan status sebagai data dalam `JOIN`.
+
+**Q18 · Batas waktu dan bukti log**
+
+Perubahan dijalankan sebagai `postgres`. Login baru sebagai `app_portal` menunjukkan `statement_timeout = 5s`. Uji timeout dengan pernyataan tunggal pada kontainer sintetis menghasilkan `ERROR: 57014: canceling statement due to statement timeout`. Log server memuat pesan pembatalan dan entri `STATEMENT` untuk kueri yang dibatalkan. Jika pemanggilan `pg_sleep` membuat kueri melewati batas, pengulangan akan menambah entri galat. Cocokkan kode `57014` dengan pesan timeout karena pembatalan lain juga dapat memakai kode itu. [Dokumentasi batas waktu](https://www.postgresql.org/docs/17/runtime-config-client.html) · [Dokumentasi log](https://www.postgresql.org/docs/17/runtime-config-logging.html) · [Daftar SQLSTATE](https://www.postgresql.org/docs/17/errcodes-appendix.html)
+
+*(Q19–Q30 dilanjutkan oleh anggota kelompok lain.)*
 
 ## Refleksi A–E
 
@@ -104,7 +147,11 @@ Mencabut hak (*revoke privilege*) bukan jalan keluar untuk keluhan keamanan anta
    - **Partition Pruning:** Jika tabel dipartisi berdasarkan `tenant_id`, klausul `WHERE tenant_id = $1` memungkinkan *pruning* partisi dilakukan sejak tahap perencanaan kueri (*compile-time pruning*), sehingga PostgreSQL hanya membaca partisi milik penyewa tersebut dan mengabaikan partisi penyewa lain.
 - **Kesimpulan:** RLS menjamin **keamanan mutlak**, sedangkan klausul `WHERE` di aplikasi menjamin **efisiensi dan performa tinggi**.
 
-*(Refleksi C, D, E akan diisi oleh anggota lain)*
+**Reflektif C (Langkah 4)**
+
+Parameterisasi menghapus penyebab injeksi pada nilai dengan memisahkan templat dari data. Daftar putih mengendalikan bagian sintaks yang memang perlu dipilih, seperti nama kolom dan arah urut. Hak minimum dan RLS membatasi dampak di basis data. Pada Q14 `app_laporan` hanya punya `SELECT` dan tidak melihat baris di luar penyewa aktif. Batas waktu membatasi durasi pernyataan dan memberi sinyal di log, seperti pembatalan `57014` pada Q18.
+
+*(Refleksi D dan E diisi oleh anggota lain.)*
 
 ## Peta Tiket #1134 ke UU PDP
 | Keluhan | Pasal relevan | Kontrol teknis pencegah | Bukti |
@@ -116,9 +163,6 @@ Seluruh percobaan serangan hanya dijalankan pada kontainer lab11 milik sendiri d
 *(Tanda Tangan Anggota Kelompok)*
 1. Daffa Umayans Saragih ...........................
 2. Juda Benhur Turnip .............................
-3. .................................................
+3. Mochamad Rizki Agiantoro........................
 4. .................................................
 5. .................................................
-
-## Penggunaan AI dan Verifikasi
-AI (LLM) digunakan untuk membantu menstrukturkan Markdown, merapikan dokumen SQL, dan menjabarkan perbedaan secara konseptual (seperti beda hak kepemilikan dan *default privileges*). Seluruh sintaks dan hasil keluaran dibuktikan dengan menjalankan kueri secara langsung pada kontainer `lab11-db` di jaringan `lab11_labnet`.
